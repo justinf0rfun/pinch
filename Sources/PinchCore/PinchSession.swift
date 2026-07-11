@@ -1,18 +1,25 @@
 import Foundation
 
-@MainActor
-public protocol PhraseTarget: AnyObject {
-    func insert(_ phrase: String) throws
+public struct PinchTarget: Equatable, Sendable {
+    public let identifier: String
+
+    public init(identifier: String) {
+        self.identifier = identifier
+    }
 }
 
-public protocol SessionClock: Sendable {
+@MainActor
+public protocol PinchIntegration: AnyObject {
+    func captureTarget() throws -> PinchTarget
+    func deliver(_ phrase: String, to target: PinchTarget) throws
+}
+
+protocol SessionClock: Sendable {
     func sleep(for duration: Duration) async
 }
 
-public struct ContinuousSessionClock: SessionClock {
-    public init() {}
-
-    public func sleep(for duration: Duration) async {
+private struct ContinuousSessionClock: SessionClock {
+    func sleep(for duration: Duration) async {
         try? await Task.sleep(for: duration)
     }
 }
@@ -34,29 +41,42 @@ public final class PinchSession {
     ]
 
     public private(set) var phase = Phase.idle
-    private let target: PhraseTarget
+    public private(set) var selectedPhrase: String?
+    private let integration: PinchIntegration
     private let clock: SessionClock
+    private var target: PinchTarget?
 
-    public init(target: PhraseTarget, clock: SessionClock = ContinuousSessionClock()) {
-        self.target = target
+    public convenience init(integration: PinchIntegration) {
+        self.init(integration: integration, clock: ContinuousSessionClock())
+    }
+
+    init(integration: PinchIntegration, clock: SessionClock) {
+        self.integration = integration
         self.clock = clock
     }
 
     public func open() {
-        phase = .open
+        do {
+            target = try integration.captureTarget()
+            phase = .open
+        } catch {
+            phase = .failed
+        }
     }
 
     public func choose(_ phrase: String) {
-        guard phase == .open else { return }
+        guard phase == .open, let target else { return }
+        selectedPhrase = phrase
         phase = .pinching
 
         Task {
             await clock.sleep(for: .milliseconds(240))
             do {
-                try target.insert(phrase)
+                try integration.deliver(phrase, to: target)
                 phase = .delivered
                 await clock.sleep(for: .milliseconds(500))
                 phase = .idle
+                selectedPhrase = nil
             } catch {
                 phase = .failed
             }
@@ -65,6 +85,6 @@ public final class PinchSession {
 
     public func recover() {
         guard phase == .failed else { return }
-        phase = .open
+        phase = target == nil ? .idle : .open
     }
 }

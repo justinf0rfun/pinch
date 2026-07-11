@@ -4,12 +4,14 @@ import Testing
 @MainActor
 @Test("a complete session delivers a phrase and returns to idle")
 func successfulSession() async throws {
-    let target = TestTarget()
+    let target = TestIntegration()
     let clock = TestClock()
-    let session = PinchSession(target: target, clock: clock)
+    let session = PinchSession(integration: target, clock: clock)
 
+    #expect(PinchSession.builtInPhrases.count == 6)
     session.open()
     #expect(session.phase == .open)
+    #expect(target.captureCount == 1)
 
     session.choose(PinchSession.builtInPhrases[3])
     #expect(session.phase == .pinching)
@@ -29,10 +31,10 @@ func successfulSession() async throws {
 @MainActor
 @Test("a failed delivery stays recoverable")
 func failedSessionCanRecover() async {
-    let target = TestTarget()
+    let target = TestIntegration()
     target.shouldFail = true
     let clock = TestClock()
-    let session = PinchSession(target: target, clock: clock)
+    let session = PinchSession(integration: target, clock: clock)
 
     session.open()
     session.choose(PinchSession.builtInPhrases[0])
@@ -52,12 +54,20 @@ func failedSessionCanRecover() async {
 }
 
 @MainActor
-private final class TestTarget: PhraseTarget {
+private final class TestIntegration: PinchIntegration {
     var text = ""
     var shouldFail = false
+    var captureCount = 0
+    private let target = PinchTarget(identifier: "test-composer")
 
-    func insert(_ phrase: String) throws {
+    func captureTarget() -> PinchTarget {
+        captureCount += 1
+        return target
+    }
+
+    func deliver(_ phrase: String, to target: PinchTarget) throws {
         if shouldFail { throw DeliveryError.rejected }
+        #expect(target == self.target)
         text = phrase
     }
 

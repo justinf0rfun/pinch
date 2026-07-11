@@ -28,10 +28,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 @Observable
-private final class ComposerTarget: PhraseTarget {
+private final class ComposerIntegration: PinchIntegration {
     var text = ""
+    private let target = PinchTarget(identifier: "internal-composer")
 
-    func insert(_ phrase: String) {
+    func captureTarget() -> PinchTarget {
+        target
+    }
+
+    func deliver(_ phrase: String, to target: PinchTarget) {
+        guard target == self.target else { return }
         text = phrase
     }
 }
@@ -39,13 +45,13 @@ private final class ComposerTarget: PhraseTarget {
 @MainActor
 @Observable
 private final class AppModel {
-    let target: ComposerTarget
+    let target: ComposerIntegration
     let session: PinchSession
 
     init() {
-        let target = ComposerTarget()
+        let target = ComposerIntegration()
         self.target = target
-        session = PinchSession(target: target)
+        session = PinchSession(integration: target)
     }
 }
 
@@ -101,6 +107,11 @@ private struct ComposerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
+                            .scaleEffect(
+                                x: model.session.phase == .pinching && model.session.selectedPhrase == phrase ? 0.72 : 1,
+                                y: model.session.phase == .pinching && model.session.selectedPhrase == phrase ? 0.92 : 1
+                            )
+                            .opacity(model.session.selectedPhrase == nil || model.session.selectedPhrase == phrase ? 1 : 0.25)
                     }
 
                     if model.session.phase == .failed {
@@ -111,6 +122,7 @@ private struct ComposerView: View {
                 .padding(8)
                 .frame(width: 280)
                 .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+                .animation(.snappy(duration: 0.24), value: model.session.phase)
             }
 
             Button("Open Pinch", systemImage: "hand.pinch") {
