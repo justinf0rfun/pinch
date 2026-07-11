@@ -3,9 +3,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "PinchPrototype",
+    name: "Pinch",
     platforms: [.macOS(.v26)],
     targets: [
-        .executableTarget(name: "PinchPrototype")
+        .target(name: "PinchCore"),
+        .executableTarget(name: "Pinch", dependencies: ["PinchCore"]),
+        .testTarget(name: "PinchCoreTests", dependencies: ["PinchCore"])
     ]
 )
