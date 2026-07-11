@@ -17,7 +17,7 @@ func chatGPTMarkerSupport() {
 }
 
 @MainActor
-@Test("direct Accessibility insertion replaces the selection in a native text field")
+@Test("direct Accessibility insertion survives focus moving to the picker")
 func directAccessibilityInsertionSmokeTest() throws {
     guard ProcessInfo.processInfo.environment["PINCH_RUN_AX_SMOKE"] == "1" else { return }
     guard AXIsProcessTrusted() else { throw MacOSPinchIntegration.IntegrationError.accessibilityPermission }
@@ -25,26 +25,31 @@ func directAccessibilityInsertionSmokeTest() throws {
     application.setActivationPolicy(.regular)
     application.finishLaunching()
 
-    let field = NSTextField(frame: NSRect(x: 20, y: 20, width: 320, height: 28))
-    field.stringValue = "before selection after"
+    let field = NSTextView(frame: NSRect(x: 20, y: 20, width: 320, height: 28))
+    field.string = "before selection after"
+    let pickerButton = NSButton(title: "Choose phrase", target: nil, action: nil)
+    pickerButton.frame = NSRect(x: 20, y: 56, width: 120, height: 24)
+    let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 96))
+    contentView.addSubview(field)
+    contentView.addSubview(pickerButton)
     let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 360, height: 80),
+        contentRect: contentView.frame,
         styleMask: [.titled],
         backing: .buffered,
         defer: false
     )
-    window.contentView = field
+    window.contentView = contentView
     window.makeKeyAndOrderFront(nil)
-    application.activate()
+    application.activate(ignoringOtherApps: true)
     window.makeFirstResponder(field)
-    field.selectText(nil)
-    field.currentEditor()?.selectedRange = NSRange(location: 7, length: 9)
-    RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    field.selectedRange = NSRange(location: 7, length: 9)
+    RunLoop.main.run(until: Date().addingTimeInterval(0.3))
     defer { window.orderOut(nil) }
 
     let integration = MacOSPinchIntegration()
     let target = try integration.captureTarget()
+    window.makeFirstResponder(pickerButton)
     try integration.deliver("inserted", to: target)
 
-    #expect(field.currentEditor()?.string == "before inserted after")
+    #expect(field.string == "before inserted after")
 }

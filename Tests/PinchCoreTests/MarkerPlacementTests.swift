@@ -2,11 +2,11 @@ import Foundation
 import Testing
 @testable import PinchCore
 
-@Test("marker sits outside the composer's lower-right control band")
+@Test("marker sits inside the composer's upper-right content area")
 func markerPlacement() {
     let composer = CGRect(x: 100, y: 200, width: 400, height: 96)
 
-    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 506, y: 168))
+    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 452, y: 220))
 }
 
 @Test("moving frames stay hidden until mouse-up and 180 ms of stability")

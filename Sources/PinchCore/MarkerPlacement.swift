@@ -3,8 +3,8 @@ import Foundation
 public enum MarkerPlacement {
     public static func origin(for composerFrame: CGRect, markerSize: CGSize) -> CGPoint {
         CGPoint(
-            x: composerFrame.maxX + 6,
-            y: composerFrame.minY - markerSize.height + 4
+            x: composerFrame.maxX - markerSize.width - 12,
+            y: composerFrame.maxY - markerSize.height - 40
         )
     }
 }

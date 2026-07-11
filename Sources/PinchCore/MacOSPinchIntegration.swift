@@ -51,8 +51,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
         guard let capturedElement, target == capturedTarget else {
             throw IntegrationError.targetChanged
         }
-        let focused = try focusedEditableElement()
-        guard CFEqual(focused, capturedElement) else { throw IntegrationError.targetChanged }
         guard AXUIElementSetAttributeValue(
             capturedElement,
             kAXSelectedTextAttribute as CFString,
