@@ -2,6 +2,19 @@ import Testing
 @testable import PinchCore
 
 @MainActor
+@Test("a session does not open while secure input is active")
+func secureInputIsRejected() {
+    let integration = TestIntegration()
+    integration.secureInputIsActive = true
+    let session = PinchSession(integration: integration)
+
+    session.open()
+
+    #expect(session.phase == .failed)
+    #expect(!integration.isMonitoringKeyboard)
+}
+
+@MainActor
 @Test("keyboard selection delivers a numbered phrase and removes its monitor")
 func numberedSelection() async {
     let integration = TestIntegration()
@@ -141,18 +154,22 @@ private final class TestIntegration: PinchIntegration {
     var text = ""
     var shouldFail = false
     var captureCount = 0
+    var secureInputIsActive = false
     var currentTarget: PinchTarget? = PinchTarget(identifier: "test-composer")
     var isMonitoringKeyboard = false
     private var keyboardHandler: (@MainActor (PinchKey) -> Void)?
 
     func captureTarget() throws -> PinchTarget {
         captureCount += 1
+        guard !secureInputIsActive else { throw DeliveryError.rejected }
         guard let currentTarget else { throw DeliveryError.rejected }
         return currentTarget
     }
 
     func deliver(_ phrase: String, to target: PinchTarget) throws {
-        guard !shouldFail, target == currentTarget else { throw DeliveryError.rejected }
+        guard !shouldFail, !secureInputIsActive, target == currentTarget else {
+            throw DeliveryError.rejected
+        }
         text = phrase
     }
 

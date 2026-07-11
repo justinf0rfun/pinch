@@ -1,5 +1,6 @@
 import ApplicationServices
 import AppKit
+import Carbon.HIToolbox
 
 @MainActor
 public final class MacOSPinchIntegration: PinchIntegration {
@@ -22,6 +23,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
 
     public func captureTarget() throws -> PinchTarget {
         guard AXIsProcessTrusted() else { throw IntegrationError.accessibilityPermission }
+        guard !IsSecureEventInputEnabled() else { throw IntegrationError.noEditableTarget }
         let element = try focusedEditableElement()
         let target = PinchTarget(identifier: UUID().uuidString, frame: frame(of: element))
         capturedElement = element
@@ -75,6 +77,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     private func focusedEditableElement() throws -> AXUIElement {
+        guard !IsSecureEventInputEnabled() else { throw IntegrationError.noEditableTarget }
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             systemWide,
