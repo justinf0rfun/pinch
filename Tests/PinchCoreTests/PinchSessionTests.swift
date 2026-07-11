@@ -47,6 +47,7 @@ func markerClickActivation() async {
     session.refreshMarker()
     session.activateMarker()
     #expect(session.phase == .hovering)
+    #expect(integration.prepareCount == 1)
     await Task.yield()
     #expect(await clock.nextDuration() == .milliseconds(120))
     await clock.advance()
@@ -182,6 +183,7 @@ func successfulSession() async throws {
     session.open()
     #expect(session.phase == .open)
     #expect(target.captureCount == 1)
+    #expect(target.prepareCount == 1)
 
     session.choose(PinchSession.builtInPhrases[3])
     #expect(session.phase == .pinching)
@@ -229,6 +231,7 @@ private final class TestIntegration: PinchIntegration {
     var text = ""
     var shouldFail = false
     var captureCount = 0
+    var prepareCount = 0
     var secureInputIsActive = false
     var currentTarget: PinchTarget? = PinchTarget(identifier: "test-composer")
     var isMonitoringKeyboard = false
@@ -239,6 +242,10 @@ private final class TestIntegration: PinchIntegration {
         guard !secureInputIsActive else { throw DeliveryError.rejected }
         guard let currentTarget else { throw DeliveryError.rejected }
         return currentTarget
+    }
+
+    func prepareDelivery(to target: PinchTarget) throws {
+        prepareCount += 1
     }
 
     func deliver(_ phrase: String, to target: PinchTarget) throws {

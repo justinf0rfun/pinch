@@ -17,6 +17,14 @@ public final class MacOSPinchIntegration: PinchIntegration {
         let element: AXUIElement
         let target: PinchTarget
         let processIdentifier: pid_t
+        var preparedDelivery: PreparedDelivery?
+    }
+
+    private struct PreparedDelivery {
+        let selectedTextRange: AXValue
+        let selectedTextMarkerRange: CFTypeRef
+        let draftHash: Int
+        let draftLength: Int
     }
 
     private let systemWide = AXUIElementCreateSystemWide()
@@ -60,9 +68,25 @@ public final class MacOSPinchIntegration: PinchIntegration {
         capturedContext = CapturedTargetContext(
             element: element,
             target: target,
-            processIdentifier: processIdentifier
+            processIdentifier: processIdentifier,
+            preparedDelivery: nil
         )
         return target
+    }
+
+    public func prepareDelivery(to target: PinchTarget) throws {
+        guard target.supportsMarker else { return }
+        guard var capturedContext, capturedContext.target == target else {
+            throw IntegrationError.targetChanged
+        }
+        let state = try currentChatGPTState(of: capturedContext.element)
+        capturedContext.preparedDelivery = PreparedDelivery(
+            selectedTextRange: state.selectedTextRange,
+            selectedTextMarkerRange: state.selectedTextMarkerRange,
+            draftHash: state.draft.hashValue,
+            draftLength: (state.draft as NSString).length
+        )
+        self.capturedContext = capturedContext
     }
 
     public func deliver(_ phrase: String, to target: PinchTarget) throws {
@@ -71,23 +95,36 @@ public final class MacOSPinchIntegration: PinchIntegration {
         }
         if target.supportsMarker {
             guard !IsSecureEventInputEnabled() else { throw IntegrationError.insertionRejected }
+            guard let preparedDelivery = capturedContext.preparedDelivery else {
+                throw IntegrationError.insertionRejected
+            }
+            let expectedText = try expectedChatGPTDraft(
+                for: capturedContext.element,
+                preparedDelivery: preparedDelivery,
+                inserting: phrase
+            )
+            guard let application = NSRunningApplication(
+                processIdentifier: capturedContext.processIdentifier
+            ), application.activate() else { throw IntegrationError.insertionRejected }
             guard AXUIElementSetAttributeValue(
                 capturedContext.element,
                 kAXFocusedAttribute as CFString,
                 kCFBooleanTrue
-            ) == .success else {
-                throw IntegrationError.insertionRejected
-            }
-            let deliveryState = try deliveryState(for: capturedContext.element, inserting: phrase)
+            ) == .success else { throw IntegrationError.insertionRejected }
+            guard waitForFocusedElement(
+                capturedContext.element,
+                processIdentifier: capturedContext.processIdentifier
+            ) else { throw IntegrationError.insertionRejected }
             guard AXUIElementSetAttributeValue(
                 capturedContext.element,
-                kAXSelectedTextRangeAttribute as CFString,
-                deliveryState.selectedTextRange
-            ) == .success else {
-                throw IntegrationError.insertionRejected
-            }
+                kAXSelectedTextMarkerRangeAttribute as CFString,
+                preparedDelivery.selectedTextMarkerRange
+            ) == .success, waitForSelectedTextMarkerRange(
+                preparedDelivery.selectedTextMarkerRange,
+                in: capturedContext.element
+            ) else { throw IntegrationError.insertionRejected }
             try postText(phrase, to: capturedContext.processIdentifier)
-            guard waitForExpectedText(deliveryState.expectedText, in: capturedContext.element) else {
+            guard waitForExpectedText(expectedText, in: capturedContext.element) else {
                 throw IntegrationError.insertionRejected
             }
             return
@@ -103,16 +140,10 @@ public final class MacOSPinchIntegration: PinchIntegration {
 
     private func postText(_ text: String, to processIdentifier: pid_t) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState),
-              let keyDown = CGEvent(
-                  keyboardEventSource: source,
-                  virtualKey: 0,
-                  keyDown: true
-              ),
-              let keyUp = CGEvent(
-                  keyboardEventSource: source,
-                  virtualKey: 0,
-                  keyDown: false
-              ) else { throw IntegrationError.insertionRejected }
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
+            throw IntegrationError.insertionRejected
+        }
         let characters = Array(text.utf16)
         characters.withUnsafeBufferPointer { buffer in
             keyDown.keyboardSetUnicodeString(
@@ -120,14 +151,45 @@ public final class MacOSPinchIntegration: PinchIntegration {
                 unicodeString: buffer.baseAddress
             )
         }
+        keyDown.flags = []
+        keyUp.flags = []
         keyDown.postToPid(processIdentifier)
         keyUp.postToPid(processIdentifier)
     }
 
-    private func deliveryState(
+    private func expectedChatGPTDraft(
         for element: AXUIElement,
+        preparedDelivery: PreparedDelivery,
         inserting phrase: String
-    ) throws -> (selectedTextRange: AXValue, expectedText: String) {
+    ) throws -> String {
+        let draft = try currentChatGPTDraft(of: element)
+        guard (draft as NSString).length == preparedDelivery.draftLength,
+              draft.hashValue == preparedDelivery.draftHash else {
+            throw IntegrationError.targetChanged
+        }
+        let selectedTextRange = preparedDelivery.selectedTextRange
+        var selectedRange = CFRange()
+        guard AXValueGetValue(selectedTextRange, .cfRange, &selectedRange),
+              selectedRange.location >= 0,
+              selectedRange.length >= 0,
+              selectedRange.location + selectedRange.length <= (draft as NSString).length else {
+            throw IntegrationError.insertionRejected
+        }
+        let nsRange = NSRange(location: selectedRange.location, length: selectedRange.length)
+        let expected = (draft as NSString).replacingCharacters(
+            in: nsRange,
+            with: phrase
+        )
+        return expected
+    }
+
+    private func currentChatGPTState(
+        of element: AXUIElement
+    ) throws -> (
+        selectedTextRange: AXValue,
+        selectedTextMarkerRange: CFTypeRef,
+        draft: String
+    ) {
         var selectedTextRangeValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,
@@ -136,30 +198,33 @@ public final class MacOSPinchIntegration: PinchIntegration {
         ) == .success, let selectedTextRange = selectedTextRangeValue as! AXValue? else {
             throw IntegrationError.insertionRejected
         }
-        let rawText = stringAttribute(of: element, named: kAXValueAttribute) ?? ""
-        var selectedRange = CFRange()
-        guard AXValueGetValue(selectedTextRange, .cfRange, &selectedRange),
-              selectedRange.location >= 0,
-              selectedRange.length >= 0 else {
+        var selectedTextMarkerRange: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextMarkerRangeAttribute as CFString,
+            &selectedTextMarkerRange
+        ) == .success, let selectedTextMarkerRange else {
             throw IntegrationError.insertionRejected
         }
-        let text = Self.normalizedChatGPTDraftText(
-            rawValue: rawText,
-            selectionLocation: selectedRange.location,
-            selectionLength: selectedRange.length
+        return (
+            selectedTextRange,
+            selectedTextMarkerRange,
+            try currentChatGPTDraft(of: element)
         )
-        guard selectedRange.location + selectedRange.length <= (text as NSString).length else {
+    }
+
+    private func currentChatGPTDraft(of element: AXUIElement) throws -> String {
+        guard let rawValue = stringAttribute(of: element, named: kAXValueAttribute) else {
             throw IntegrationError.insertionRejected
         }
-        let expected = (text as NSString).replacingCharacters(
-            in: NSRange(location: selectedRange.location, length: selectedRange.length),
-            with: phrase
+        return Self.normalizedChatGPTDraftText(
+            rawValue: rawValue,
+            hasPlaceholderElement: containsDOMClass("placeholder", below: element)
         )
-        return (selectedTextRange, expected)
     }
 
     private func waitForExpectedText(_ expected: String, in element: AXUIElement) -> Bool {
-        let deadline = ProcessInfo.processInfo.systemUptime + 0.15
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.3
         repeat {
             if stringAttribute(of: element, named: kAXValueAttribute) == expected { return true }
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
@@ -167,12 +232,70 @@ public final class MacOSPinchIntegration: PinchIntegration {
         return false
     }
 
+    private func waitForFocusedElement(
+        _ expected: AXUIElement,
+        processIdentifier: pid_t
+    ) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.15
+        repeat {
+            var value: CFTypeRef?
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier,
+               AXUIElementCopyAttributeValue(
+                   systemWide,
+                   kAXFocusedUIElementAttribute as CFString,
+                   &value
+               ) == .success,
+               let focused = value as! AXUIElement?,
+               CFEqual(focused, expected) { return true }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return false
+    }
+
+    private func waitForSelectedTextMarkerRange(
+        _ expected: CFTypeRef,
+        in element: AXUIElement
+    ) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.15
+        repeat {
+            var value: CFTypeRef?
+            if AXUIElementCopyAttributeValue(
+                element,
+                kAXSelectedTextMarkerRangeAttribute as CFString,
+                &value
+            ) == .success, let value, CFEqual(value, expected) { return true }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return false
+    }
+
     nonisolated static func normalizedChatGPTDraftText(
         rawValue: String,
-        selectionLocation: Int,
-        selectionLength: Int
+        hasPlaceholderElement: Bool
     ) -> String {
-        selectionLocation == 0 && selectionLength == 0 && rawValue.hasPrefix("\n") ? "" : rawValue
+        hasPlaceholderElement ? "" : rawValue
+    }
+
+    private func containsDOMClass(_ domClass: String, below root: AXUIElement) -> Bool {
+        var queue = children(of: root).map { ($0, 1) }
+        while !queue.isEmpty {
+            let (element, depth) = queue.removeFirst()
+            var domClassesValue: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXDOMClassListAttribute as CFString, &domClassesValue)
+            if (domClassesValue as? [String] ?? []).contains(domClass) { return true }
+            if depth < 3 { queue.append(contentsOf: children(of: element).map { ($0, depth + 1) }) }
+        }
+        return false
+    }
+
+    private func children(of element: AXUIElement) -> [AXUIElement] {
+        var childrenValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXChildrenAttribute as CFString,
+            &childrenValue
+        ) == .success else { return [] }
+        return childrenValue as? [AXUIElement] ?? []
     }
 
     private func stringAttribute(of element: AXUIElement, named attribute: String) -> String? {

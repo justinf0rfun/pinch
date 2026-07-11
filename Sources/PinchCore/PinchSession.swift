@@ -27,9 +27,14 @@ public enum PinchKey: Equatable, Sendable {
 @MainActor
 public protocol PinchIntegration: AnyObject {
     func captureTarget() throws -> PinchTarget
+    func prepareDelivery(to target: PinchTarget) throws
     func deliver(_ phrase: String, to target: PinchTarget) throws
     func startKeyboardMonitor(_ handler: @escaping @MainActor (PinchKey) -> Void)
     func stopKeyboardMonitor()
+}
+
+public extension PinchIntegration {
+    func prepareDelivery(to target: PinchTarget) throws {}
 }
 
 protocol SessionClock: Sendable {
@@ -81,7 +86,9 @@ public final class PinchSession {
     public func open() {
         guard phase == .idle else { return }
         do {
-            target = try integration.captureTarget()
+            let capturedTarget = try integration.captureTarget()
+            try integration.prepareDelivery(to: capturedTarget)
+            target = capturedTarget
             finishOpening()
         } catch {
             target = nil
@@ -177,6 +184,13 @@ public final class PinchSession {
 
     private func beginMarkerActivation(after delay: Duration) {
         guard (phase == .idle || phase == .hovering), let markerTarget else { return }
+        do {
+            try integration.prepareDelivery(to: markerTarget)
+        } catch {
+            target = nil
+            phase = .failed
+            return
+        }
         markerTask?.cancel()
         target = markerTarget
         phase = .hovering

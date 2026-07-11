@@ -37,14 +37,12 @@ func chatGPTComposerFrame() {
 func chatGPTPlaceholderText() {
     #expect(MacOSPinchIntegration.normalizedChatGPTDraftText(
         rawValue: "\nAsk for follow-up changes",
-        selectionLocation: 0,
-        selectionLength: 0
+        hasPlaceholderElement: true
     ) == "")
     #expect(MacOSPinchIntegration.normalizedChatGPTDraftText(
-        rawValue: "actual draft",
-        selectionLocation: 0,
-        selectionLength: 0
-    ) == "actual draft")
+        rawValue: "\nactual draft",
+        hasPlaceholderElement: false
+    ) == "\nactual draft")
 }
 
 @MainActor
@@ -86,7 +84,7 @@ func directAccessibilityInsertionSmokeTest() throws {
 }
 
 @MainActor
-@Test("ChatGPT ProseMirror accepts insertion after focus moves to the picker")
+@Test("ChatGPT ProseMirror replaces the captured selection after picker focus")
 func chatGPTAccessibilityInsertionSmokeTest() throws {
     guard ProcessInfo.processInfo.environment["PINCH_RUN_CHATGPT_AX_SMOKE"] == "1" else { return }
     guard AXIsProcessTrusted() else { throw MacOSPinchIntegration.IntegrationError.accessibilityPermission }
@@ -107,9 +105,35 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
     let originalValue = accessibilityString(composer, kAXValueAttribute) ?? ""
-    let originalDraft = originalValue.hasPrefix("\n") ? "" : originalValue
+    let originalDraft = composerContainsDOMClass("placeholder", below: composer) ? "" : originalValue
+    var didRestoreDraft = false
+    defer {
+        if !didRestoreDraft {
+            try? restoreChatGPTComposer(
+                composer,
+                processIdentifier: chatGPT.processIdentifier,
+                draft: originalDraft
+            )
+        }
+    }
+
+    let fixture = "before SELECTED after"
+    try restoreChatGPTComposer(
+        composer,
+        processIdentifier: chatGPT.processIdentifier,
+        draft: fixture
+    )
+    try selectChatGPTText(
+        composer,
+        processIdentifier: chatGPT.processIdentifier,
+        location: 7,
+        length: 8,
+        expectedSelection: "SELECTED"
+    )
+
     let integration = MacOSPinchIntegration()
     let target = try integration.captureTarget()
+    try integration.prepareDelivery(to: target)
 
     let pickerButton = NSButton(title: "Choose phrase", target: nil, action: nil)
     let pickerWindow = NSWindow(
@@ -126,16 +150,6 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     defer { pickerWindow.orderOut(nil) }
 
     let phrase = "确认，继续"
-    var didRestoreDraft = false
-    defer {
-        if !didRestoreDraft {
-            try? restoreChatGPTComposer(
-                composer,
-                processIdentifier: chatGPT.processIdentifier,
-                draft: originalDraft
-            )
-        }
-    }
     try integration.deliver(phrase, to: target)
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     let inserted = accessibilityString(composer, kAXValueAttribute)
@@ -149,8 +163,8 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     let restored = accessibilityString(composer, kAXValueAttribute)
 
-    #expect(inserted?.contains(phrase) == true)
-    #expect(originalDraft.isEmpty ? (restored == "" || restored?.hasPrefix("\n") == true) : restored == originalDraft)
+    #expect(inserted == "before \(phrase) after")
+    #expect(originalDraft.isEmpty ? composerContainsDOMClass("placeholder", below: composer) : restored == originalDraft)
 }
 
 private func focusedChatGPTComposer(application: NSRunningApplication) -> AXUIElement? {
@@ -188,6 +202,47 @@ private func accessibilityString(_ element: AXUIElement, _ attribute: String) ->
     return value as? String
 }
 
+private func selectChatGPTText(
+    _ element: AXUIElement,
+    processIdentifier: pid_t,
+    location: Int,
+    length: Int,
+    expectedSelection: String
+) throws {
+    for _ in 0..<3 {
+        try postKey(0, flags: .maskCommand, to: processIdentifier)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.04))
+        try postKey(123, to: processIdentifier)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.04))
+        for _ in 0..<location {
+            try postKey(124, to: processIdentifier)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        for _ in 0..<length {
+            try postKey(124, flags: .maskShift, to: processIdentifier)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        if accessibilityString(element, kAXSelectedTextAttribute) == expectedSelection { return }
+    }
+    throw MacOSPinchIntegration.IntegrationError.insertionRejected
+}
+
+private func composerContainsDOMClass(_ domClass: String, below root: AXUIElement) -> Bool {
+    var queue = [root]
+    while !queue.isEmpty {
+        let element = queue.removeFirst()
+        var classesValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXDOMClassListAttribute as CFString, &classesValue)
+        if (classesValue as? [String] ?? []).contains(domClass) { return true }
+        var childrenValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success {
+            queue.append(contentsOf: childrenValue as? [AXUIElement] ?? [])
+        }
+    }
+    return false
+}
+
 private func restoreChatGPTComposer(
     _ element: AXUIElement,
     processIdentifier: pid_t,
@@ -199,8 +254,13 @@ private func restoreChatGPTComposer(
         kCFBooleanTrue
     ) == .success else { throw MacOSPinchIntegration.IntegrationError.insertionRejected }
     try postKey(0, flags: .maskCommand, to: processIdentifier)
+    RunLoop.main.run(until: Date().addingTimeInterval(0.03))
     try postKey(51, to: processIdentifier)
-    if !draft.isEmpty { try postText(draft, to: processIdentifier) }
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    if !draft.isEmpty {
+        try postText(draft, to: processIdentifier)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    }
 }
 
 private func postKey(
