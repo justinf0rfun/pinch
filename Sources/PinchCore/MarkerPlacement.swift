@@ -19,6 +19,19 @@ public struct MarkerFrameStabilizer {
         self.stabilityInterval = stabilityInterval
     }
 
+    @discardableResult
+    public mutating func beginPointerDrag() -> Bool {
+        guard !dragActive else { return false }
+        dragActive = true
+        return true
+    }
+
+    public mutating func endPointerDrag(at time: TimeInterval) {
+        guard dragActive else { return }
+        dragActive = false
+        stableSince = time
+    }
+
     public mutating func frame(
         for frame: CGRect?,
         at time: TimeInterval,
@@ -34,7 +47,7 @@ public struct MarkerFrameStabilizer {
         if candidate != frame {
             candidate = frame
             stableSince = time
-            dragActive = leftMouseDown
+            dragActive = dragActive || leftMouseDown
             return nil
         }
 

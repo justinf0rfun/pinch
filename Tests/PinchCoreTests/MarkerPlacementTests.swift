@@ -36,3 +36,24 @@ func markerFrameChangeStabilization() {
     #expect(stabilizer.frame(for: second, at: 1.19, leftMouseDown: false) == nil)
     #expect(stabilizer.frame(for: second, at: 1.371, leftMouseDown: false) == second)
 }
+
+@Test("pointer drag events hide before the next frame sample")
+func markerPointerDragEvents() {
+    let frame = CGRect(x: 10, y: 20, width: 300, height: 80)
+    var stabilizer = MarkerFrameStabilizer(stabilityInterval: 0.18)
+
+    #expect(stabilizer.frame(for: frame, at: 0, leftMouseDown: false) == nil)
+    #expect(stabilizer.frame(for: frame, at: 0.181, leftMouseDown: false) == frame)
+    stabilizer.endPointerDrag(at: 0.19)
+    #expect(stabilizer.frame(for: frame, at: 0.19, leftMouseDown: true) == frame)
+
+    let beganDrag = stabilizer.beginPointerDrag()
+    let repeatedDrag = stabilizer.beginPointerDrag()
+    #expect(beganDrag)
+    #expect(!repeatedDrag)
+    #expect(stabilizer.frame(for: frame, at: 0.20, leftMouseDown: true) == nil)
+
+    stabilizer.endPointerDrag(at: 0.21)
+    #expect(stabilizer.frame(for: frame, at: 0.389, leftMouseDown: false) == nil)
+    #expect(stabilizer.frame(for: frame, at: 0.391, leftMouseDown: false) == frame)
+}

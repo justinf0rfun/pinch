@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var delivery = DeliveryPanel(session: session)
     private var shortcut: GlobalShortcut?
     private var markerTimer: Timer?
+    private var markerDragMonitor: Any?
     private var markerStabilizer = MarkerFrameStabilizer()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -36,6 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         RunLoop.main.add(timer, forMode: .common)
         markerTimer = timer
+        markerDragMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDragged, .leftMouseUp]
+        ) { [weak self] event in
+            MainActor.assumeIsolated { self?.handleMarkerDrag(event.type) }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -45,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         delivery.close()
         markerTimer?.invalidate()
         markerTimer = nil
+        if let markerDragMonitor { NSEvent.removeMonitor(markerDragMonitor) }
+        markerDragMonitor = nil
         shortcut?.stop()
         shortcut = nil
     }
@@ -74,6 +82,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             delivery.show(from: panel.frame, to: session.attachmentFrame)
         } else {
             delivery.close()
+        }
+    }
+
+    private func handleMarkerDrag(_ eventType: NSEvent.EventType) {
+        switch eventType {
+        case .leftMouseDragged:
+            guard session.phase == .idle, session.markerFrame != nil,
+                  markerStabilizer.beginPointerDrag() else { return }
+            marker.close()
+        case .leftMouseUp:
+            markerStabilizer.endPointerDrag(at: ProcessInfo.processInfo.systemUptime)
+        default:
+            break
         }
     }
 }
