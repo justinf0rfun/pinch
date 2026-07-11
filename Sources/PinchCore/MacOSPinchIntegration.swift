@@ -155,7 +155,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     ) -> Bool {
         guard role == kAXTextAreaRole as String, domClasses.contains("ProseMirror") else { return false }
         return bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
-            || applicationName?.caseInsensitiveCompare("Codex") == .orderedSame
+            || ["Codex", "ChatGPT"].contains { applicationName?.caseInsensitiveCompare($0) == .orderedSame }
     }
 }
 

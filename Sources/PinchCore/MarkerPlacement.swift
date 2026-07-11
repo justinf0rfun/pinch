@@ -1,0 +1,51 @@
+import Foundation
+
+public enum MarkerPlacement {
+    public static func origin(for composerFrame: CGRect, markerSize: CGSize) -> CGPoint {
+        CGPoint(
+            x: composerFrame.maxX + 6,
+            y: composerFrame.minY - markerSize.height + 4
+        )
+    }
+}
+
+public struct MarkerFrameStabilizer {
+    private let stabilityInterval: TimeInterval
+    private var candidate: CGRect?
+    private var stableSince: TimeInterval?
+    private var dragActive = false
+
+    public init(stabilityInterval: TimeInterval = 0.18) {
+        self.stabilityInterval = stabilityInterval
+    }
+
+    public mutating func frame(
+        for frame: CGRect?,
+        at time: TimeInterval,
+        leftMouseDown: Bool
+    ) -> CGRect? {
+        guard let frame else {
+            candidate = nil
+            stableSince = nil
+            dragActive = false
+            return nil
+        }
+
+        if candidate != frame {
+            candidate = frame
+            stableSince = time
+            dragActive = leftMouseDown
+            return nil
+        }
+
+        if dragActive {
+            guard !leftMouseDown else { return nil }
+            dragActive = false
+            stableSince = time
+            return nil
+        }
+
+        guard let stableSince, time - stableSince >= stabilityInterval else { return nil }
+        return frame
+    }
+}

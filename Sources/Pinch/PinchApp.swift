@@ -25,14 +25,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var delivery = DeliveryPanel(session: session)
     private var shortcut: GlobalShortcut?
     private var markerTimer: Timer?
+    private var markerStabilizer = MarkerFrameStabilizer()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         integration.requestAccessibilityPermission()
         shortcut = GlobalShortcut { [weak self] in self?.openPinch() }
-        markerTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.updateMarker() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        markerTimer = timer
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -54,7 +57,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateMarker() {
         if session.phase == .idle { session.refreshMarker() }
-        guard let markerFrame = session.markerFrame else {
+        let stableFrame = markerStabilizer.frame(
+            for: session.markerFrame,
+            at: ProcessInfo.processInfo.systemUptime,
+            leftMouseDown: CGEventSource.buttonState(.combinedSessionState, button: .left)
+        )
+        guard let markerFrame = stableFrame else {
             marker.close()
             return
         }
@@ -93,11 +101,20 @@ private final class MarkerPanel {
 
     func show(near targetFrame: CGRect) {
         let target = appKitFrame(for: targetFrame)
-        panel.setFrameOrigin(NSPoint(x: target.maxX - 14, y: target.midY - Self.size.height / 2))
+        panel.setFrameOrigin(MarkerPlacement.origin(for: target, markerSize: Self.size))
+        guard !panel.isVisible else { return }
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            panel.animator().alphaValue = 1
+        }
     }
 
-    func close() { panel.orderOut(nil) }
+    func close() {
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+    }
 }
 
 @MainActor
