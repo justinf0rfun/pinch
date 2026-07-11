@@ -32,15 +32,18 @@ public final class MacOSPinchIntegration: PinchIntegration {
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
         var domClassesValue: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXDOMClassListAttribute as CFString, &domClassesValue)
+        let editorFrame = frame(of: element)
+        let supportsMarker = Self.supportsMarker(
+            bundleIdentifier: application?.bundleIdentifier,
+            applicationName: application?.localizedName,
+            role: roleValue as? String,
+            domClasses: domClassesValue as? [String] ?? []
+        )
         let target = PinchTarget(
             identifier: UUID().uuidString,
-            frame: frame(of: element),
-            supportsMarker: Self.supportsMarker(
-                bundleIdentifier: application?.bundleIdentifier,
-                applicationName: application?.localizedName,
-                role: roleValue as? String,
-                domClasses: domClassesValue as? [String] ?? []
-            )
+            frame: editorFrame,
+            visualFrame: supportsMarker ? composerFrame(of: element, editorFrame: editorFrame) : editorFrame,
+            supportsMarker: supportsMarker
         )
         capturedElement = element
         capturedTarget = target
@@ -50,6 +53,13 @@ public final class MacOSPinchIntegration: PinchIntegration {
     public func deliver(_ phrase: String, to target: PinchTarget) throws {
         guard let capturedElement, target == capturedTarget else {
             throw IntegrationError.targetChanged
+        }
+        guard AXUIElementSetAttributeValue(
+            capturedElement,
+            kAXFocusedAttribute as CFString,
+            kCFBooleanTrue
+        ) == .success else {
+            throw IntegrationError.insertionRejected
         }
         guard AXUIElementSetAttributeValue(
             capturedElement,
@@ -130,6 +140,31 @@ public final class MacOSPinchIntegration: PinchIntegration {
               AXValueGetValue(positionAXValue, .cgPoint, &position),
               AXValueGetValue(sizeAXValue, .cgSize, &size) else { return .zero }
         return CGRect(origin: position, size: size)
+    }
+
+    private func composerFrame(of element: AXUIElement, editorFrame: CGRect) -> CGRect {
+        var current = element
+        var ancestors: [(frame: CGRect, domClasses: [String])] = []
+        for _ in 0..<8 {
+            var parentValue: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(
+                current,
+                kAXParentAttribute as CFString,
+                &parentValue
+            ) == .success, let parent = parentValue as! AXUIElement? else { break }
+            var domClassesValue: CFTypeRef?
+            AXUIElementCopyAttributeValue(parent, kAXDOMClassListAttribute as CFString, &domClassesValue)
+            ancestors.append((frame(of: parent), domClassesValue as? [String] ?? []))
+            current = parent
+        }
+        return Self.composerFrame(editorFrame: editorFrame, ancestors: ancestors)
+    }
+
+    nonisolated static func composerFrame(
+        editorFrame: CGRect,
+        ancestors: [(frame: CGRect, domClasses: [String])]
+    ) -> CGRect {
+        ancestors.first { $0.domClasses.contains("composer-surface-chrome") }?.frame ?? editorFrame
     }
 
     fileprivate nonisolated static func pinchKey(for keyCode: Int) -> PinchKey? {

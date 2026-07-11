@@ -6,7 +6,7 @@ import Testing
 func markerPlacement() {
     let composer = CGRect(x: 100, y: 200, width: 400, height: 96)
 
-    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 452, y: 220))
+    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 448, y: 244))
 }
 
 @Test("moving frames stay hidden until mouse-up and 180 ms of stability")

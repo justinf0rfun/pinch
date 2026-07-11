@@ -216,10 +216,9 @@ private struct MarkerView: View {
         Button("打开 Pinch", systemImage: "hand.pinch") { session.activateMarker() }
             .labelStyle(.iconOnly)
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(.black.opacity(0.72))
-            .frame(width: 34, height: 34)
-            .contentShape(.rect(cornerRadius: 10))
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 10))
+            .foregroundStyle(.secondary)
+            .frame(width: 36, height: 36)
+            .contentShape(.circle)
             .scaleEffect(x: isPinching && !reduceMotion ? 0.78 : 1, y: isPinching && !reduceMotion ? 0.92 : 1)
             .rotationEffect(.degrees(isPinching && !reduceMotion ? -7 : 0))
         .buttonStyle(.plain)

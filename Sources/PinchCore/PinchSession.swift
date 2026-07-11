@@ -4,11 +4,18 @@ import CoreGraphics
 public struct PinchTarget: Equatable, Sendable {
     public let identifier: String
     public let frame: CGRect
+    public let visualFrame: CGRect
     public let supportsMarker: Bool
 
-    public init(identifier: String, frame: CGRect = .zero, supportsMarker: Bool = false) {
+    public init(
+        identifier: String,
+        frame: CGRect = .zero,
+        visualFrame: CGRect? = nil,
+        supportsMarker: Bool = false
+    ) {
         self.identifier = identifier
         self.frame = frame
+        self.visualFrame = visualFrame ?? frame
         self.supportsMarker = supportsMarker
     }
 }
@@ -54,8 +61,8 @@ public final class PinchSession {
     public private(set) var phase = Phase.idle
     public private(set) var selectedPhrase: String?
     public private(set) var highlightedPhrase: String?
-    public var targetFrame: CGRect { target?.frame ?? .zero }
-    public var markerFrame: CGRect? { markerTarget?.frame }
+    public var targetFrame: CGRect { target?.visualFrame ?? .zero }
+    public var markerFrame: CGRect? { markerTarget?.visualFrame }
     private let integration: PinchIntegration
     private let clock: SessionClock
     private var target: PinchTarget?

@@ -16,6 +16,20 @@ func chatGPTMarkerSupport() {
     #expect(!MacOSPinchIntegration.supportsMarker(bundleIdentifier: "com.example.codex-helper", applicationName: "Codex Helper", role: kAXTextAreaRole, domClasses: ["ProseMirror"]))
 }
 
+@Test("the ChatGPT composer surface, not its editor, anchors the marker")
+func chatGPTComposerFrame() {
+    let editor = CGRect(x: 1023, y: 1006, width: 712, height: 44)
+    let composer = CGRect(x: 1011, y: 992, width: 736, height: 98)
+    let ancestors = [
+        (frame: editor, domClasses: ["relative", "text-size-chat"]),
+        (frame: composer, domClasses: ["composer-surface-chrome", "relative"]),
+        (frame: CGRect(x: 995, y: 960, width: 768, height: 130), domClasses: ["px-toolbar"])
+    ]
+
+    #expect(MacOSPinchIntegration.composerFrame(editorFrame: editor, ancestors: ancestors) == composer)
+    #expect(MacOSPinchIntegration.composerFrame(editorFrame: editor, ancestors: []) == editor)
+}
+
 @MainActor
 @Test("direct Accessibility insertion survives focus moving to the picker")
 func directAccessibilityInsertionSmokeTest() throws {
@@ -51,5 +65,6 @@ func directAccessibilityInsertionSmokeTest() throws {
     window.makeFirstResponder(pickerButton)
     try integration.deliver("inserted", to: target)
 
+    #expect(window.firstResponder === field)
     #expect(field.string == "before inserted after")
 }

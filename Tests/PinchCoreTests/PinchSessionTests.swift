@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import PinchCore
 
@@ -5,12 +6,19 @@ import Testing
 @Test("leaving the Codex marker before its dwell cancels reveal")
 func markerHoverCancellation() async {
     let integration = TestIntegration()
-    integration.currentTarget = PinchTarget(identifier: "codex-composer", frame: .init(x: 10, y: 20, width: 300, height: 80), supportsMarker: true)
+    let editorFrame = CGRect(x: 10, y: 20, width: 300, height: 44)
+    let composerFrame = CGRect(x: 0, y: 8, width: 324, height: 96)
+    integration.currentTarget = PinchTarget(
+        identifier: "codex-composer",
+        frame: editorFrame,
+        visualFrame: composerFrame,
+        supportsMarker: true
+    )
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)
 
     session.refreshMarker()
-    #expect(session.markerFrame == integration.currentTarget?.frame)
+    #expect(session.markerFrame == composerFrame)
     session.beginMarkerHover()
     #expect(session.phase == .hovering)
     session.endMarkerHover()
@@ -26,7 +34,13 @@ func markerHoverCancellation() async {
 @Test("clicking the Codex marker performs a pre-pinch and opens the picker")
 func markerClickActivation() async {
     let integration = TestIntegration()
-    integration.currentTarget = PinchTarget(identifier: "codex-composer", supportsMarker: true)
+    let composerFrame = CGRect(x: 0, y: 8, width: 324, height: 96)
+    integration.currentTarget = PinchTarget(
+        identifier: "codex-composer",
+        frame: CGRect(x: 10, y: 20, width: 300, height: 44),
+        visualFrame: composerFrame,
+        supportsMarker: true
+    )
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)
 
@@ -39,6 +53,7 @@ func markerClickActivation() async {
     await Task.yield()
 
     #expect(session.phase == .open)
+    #expect(session.targetFrame == composerFrame)
     #expect(integration.isMonitoringKeyboard)
 }
 
