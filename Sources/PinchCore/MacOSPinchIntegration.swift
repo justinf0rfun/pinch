@@ -17,6 +17,8 @@ public final class MacOSPinchIntegration: PinchIntegration {
         let element: AXUIElement
         let target: PinchTarget
         let processIdentifier: pid_t
+        let allowsUnicodeDelivery: Bool
+        let usesUnicodeOnly: Bool
         var preparedDelivery: PreparedDelivery?
     }
 
@@ -48,6 +50,8 @@ public final class MacOSPinchIntegration: PinchIntegration {
         var processIdentifier: pid_t = 0
         AXUIElementGetPid(element, &processIdentifier)
         let application = NSRunningApplication(processIdentifier: processIdentifier)
+        let terminalApplication = Self.isTerminal(application?.bundleIdentifier)
+        let warpApplication = Self.isWarp(application?.bundleIdentifier)
         var roleValue: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
         var domClassesValue: CFTypeRef?
@@ -60,16 +64,34 @@ public final class MacOSPinchIntegration: PinchIntegration {
             domClasses: domClassesValue as? [String] ?? []
         )
         let composerSurfaceFrame = supportsMarker ? composerFrame(of: element) : nil
+        let exactCaretFrame = supportsMarker ? nil : caretFrame(of: element)
+        let inputAttachmentFrame = exactCaretFrame
+            ?? (warpApplication ? Self.warpPromptFrame(editorFrame: editorFrame) : nil)
+        let anchor: PinchTargetAnchor = supportsMarker
+            ? .composer
+            : exactCaretFrame != nil ? .caret : warpApplication ? .prompt : .input
+        let attachmentFrame = Self.preferredAttachmentFrame(
+            editorFrame: editorFrame,
+            caretFrame: supportsMarker ? nil : inputAttachmentFrame,
+            supportsMarker: supportsMarker,
+            composerFrame: composerSurfaceFrame
+        )
         let target = PinchTarget(
             identifier: UUID().uuidString,
             editableFrame: editorFrame,
-            attachmentFrame: composerSurfaceFrame ?? editorFrame,
-            supportsMarker: supportsMarker && composerSurfaceFrame != nil
+            attachmentFrame: attachmentFrame,
+            supportsMarker: supportsMarker,
+            anchor: anchor
         )
         capturedContext = CapturedTargetContext(
             element: element,
             target: target,
             processIdentifier: processIdentifier,
+            allowsUnicodeDelivery: Self.allowsUnicodeDelivery(
+                bundleIdentifier: application?.bundleIdentifier,
+                role: roleValue as? String
+            ),
+            usesUnicodeOnly: terminalApplication,
             preparedDelivery: nil
         )
         return target
@@ -124,22 +146,40 @@ public final class MacOSPinchIntegration: PinchIntegration {
                 preparedDelivery: preparedDelivery,
                 inserting: phrase
             )
-            try postText(phrase, to: capturedContext.processIdentifier)
+            try Self.postUnicodeText(phrase, to: capturedContext.processIdentifier)
             guard waitForExpectedText(expectedText, in: capturedContext.element) else {
                 throw IntegrationError.insertionRejected
             }
             return
         }
-        guard AXUIElementSetAttributeValue(
-            capturedContext.element,
-            kAXSelectedTextAttribute as CFString,
-            phrase as CFTypeRef
-        ) == .success else {
-            throw IntegrationError.insertionRejected
-        }
+        try Self.deliverNonChatGPT(
+            validateTarget: { [self] in
+                waitForFocusedElement(
+                    capturedContext.element,
+                    processIdentifier: capturedContext.processIdentifier
+                )
+            },
+            secureInputActive: { IsSecureEventInputEnabled() },
+            directInsertion: capturedContext.usesUnicodeOnly ? nil : {
+                AXUIElementSetAttributeValue(
+                    capturedContext.element,
+                    kAXSelectedTextAttribute as CFString,
+                    phrase as CFTypeRef
+                ) == .success
+            },
+            unicodeInsertion: {
+                guard capturedContext.allowsUnicodeDelivery else { return false }
+                do {
+                    try Self.postUnicodeText(phrase, to: capturedContext.processIdentifier)
+                    return true
+                } catch {
+                    return false
+                }
+            }
+        )
     }
 
-    private func postText(_ text: String, to processIdentifier: pid_t) throws {
+    private nonisolated static func postUnicodeText(_ text: String, to processIdentifier: pid_t) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
@@ -366,16 +406,44 @@ public final class MacOSPinchIntegration: PinchIntegration {
 
         var subroleValue: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subroleValue)
-        if let subrole = subroleValue as? String, subrole == kAXSecureTextFieldSubrole as String {
-            throw IntegrationError.noEditableTarget
-        }
+
+        var roleValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
+
+        var enabledValue: CFTypeRef?
+        let enabled = AXUIElementCopyAttributeValue(
+            element,
+            kAXEnabledAttribute as CFString,
+            &enabledValue
+        ) != .success || (enabledValue as? Bool) == true
 
         var selectedTextIsSettable = DarwinBoolean(false)
-        guard AXUIElementIsAttributeSettable(
+        AXUIElementIsAttributeSettable(
             element,
             kAXSelectedTextAttribute as CFString,
             &selectedTextIsSettable
-        ) == .success, selectedTextIsSettable.boolValue else {
+        )
+
+        var valueIsSettable = DarwinBoolean(false)
+        AXUIElementIsAttributeSettable(
+            element,
+            kAXValueAttribute as CFString,
+            &valueIsSettable
+        )
+
+        var processIdentifier: pid_t = 0
+        AXUIElementGetPid(element, &processIdentifier)
+        let bundleIdentifier = NSRunningApplication(
+            processIdentifier: processIdentifier
+        )?.bundleIdentifier
+        guard Self.supportsShortcutTarget(
+            bundleIdentifier: bundleIdentifier,
+            role: roleValue as? String,
+            subrole: subroleValue as? String,
+            enabled: enabled,
+            selectedTextSettable: selectedTextIsSettable.boolValue,
+            valueSettable: valueIsSettable.boolValue
+        ) else {
             throw IntegrationError.noEditableTarget
         }
         return element
@@ -393,6 +461,36 @@ public final class MacOSPinchIntegration: PinchIntegration {
               AXValueGetValue(positionAXValue, .cgPoint, &position),
               AXValueGetValue(sizeAXValue, .cgSize, &size) else { return .zero }
         return CGRect(origin: position, size: size)
+    }
+
+    private func caretFrame(of element: AXUIElement) -> CGRect? {
+        var selectedRangeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedRangeValue
+        ) == .success, let selectedRangeValue = selectedRangeValue as! AXValue? else {
+            return nil
+        }
+        var selectedRange = CFRange()
+        guard AXValueGetValue(selectedRangeValue, .cfRange, &selectedRange),
+              selectedRange.location >= 0,
+              selectedRange.length >= 0 else { return nil }
+        var caretRange = CFRange(
+            location: selectedRange.location + selectedRange.length,
+            length: 0
+        )
+        guard let caretRangeValue = AXValueCreate(.cfRange, &caretRange) else { return nil }
+        var boundsValue: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(
+            element,
+            kAXBoundsForRangeParameterizedAttribute as CFString,
+            caretRangeValue,
+            &boundsValue
+        ) == .success, let boundsValue = boundsValue as! AXValue? else { return nil }
+        var bounds = CGRect.zero
+        guard AXValueGetValue(boundsValue, .cgRect, &bounds), !bounds.isEmpty else { return nil }
+        return bounds
     }
 
     private func composerFrame(of element: AXUIElement) -> CGRect? {
@@ -441,9 +539,92 @@ public final class MacOSPinchIntegration: PinchIntegration {
         role: String?,
         domClasses: [String]
     ) -> Bool {
-        guard role == kAXTextAreaRole as String, domClasses.contains("ProseMirror") else { return false }
-        return bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
-            || ["Codex", "ChatGPT"].contains { applicationName?.caseInsensitiveCompare($0) == .orderedSame }
+        guard role == kAXTextAreaRole as String else { return false }
+        if bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame {
+            return true
+        }
+        guard domClasses.contains("ProseMirror") else { return false }
+        return ["Codex", "ChatGPT"].contains {
+            applicationName?.caseInsensitiveCompare($0) == .orderedSame
+        }
+    }
+
+    nonisolated static func preferredAttachmentFrame(
+        editorFrame: CGRect,
+        caretFrame: CGRect?,
+        supportsMarker: Bool,
+        composerFrame: CGRect?
+    ) -> CGRect {
+        supportsMarker ? composerFrame ?? editorFrame : caretFrame ?? editorFrame
+    }
+
+    nonisolated static func warpPromptFrame(editorFrame: CGRect) -> CGRect {
+        let lineHeight: CGFloat = 22
+        return CGRect(
+            x: editorFrame.minX + 16,
+            y: max(editorFrame.maxY - 44, editorFrame.minY),
+            width: 1,
+            height: lineHeight
+        )
+    }
+
+    nonisolated static func supportsShortcutTarget(
+        bundleIdentifier: String?,
+        role: String?,
+        subrole: String?,
+        enabled: Bool,
+        selectedTextSettable: Bool,
+        valueSettable: Bool
+    ) -> Bool {
+        guard enabled, subrole != kAXSecureTextFieldSubrole as String else { return false }
+        let isTextControl = role == kAXTextAreaRole as String
+            || role == kAXTextFieldRole as String
+        guard isTextControl else { return false }
+        return selectedTextSettable
+            || isTerminal(bundleIdentifier)
+            || (valueSettable && isSupportedBrowser(bundleIdentifier))
+    }
+
+    nonisolated static func deliverNonChatGPT(
+        validateTarget: () -> Bool,
+        secureInputActive: () -> Bool,
+        directInsertion: (() -> Bool)?,
+        unicodeInsertion: () -> Bool
+    ) throws {
+        if let directInsertion {
+            guard validateTarget(), !secureInputActive() else {
+                throw IntegrationError.targetChanged
+            }
+            if directInsertion() { return }
+        }
+        guard validateTarget(), !secureInputActive(), unicodeInsertion() else {
+            throw IntegrationError.insertionRejected
+        }
+    }
+
+    private nonisolated static func allowsUnicodeDelivery(
+        bundleIdentifier: String?,
+        role: String?
+    ) -> Bool {
+        guard role == kAXTextAreaRole as String || role == kAXTextFieldRole as String else {
+            return false
+        }
+        return isSupportedBrowser(bundleIdentifier) || isTerminal(bundleIdentifier)
+    }
+
+    private nonisolated static func isSupportedBrowser(_ bundleIdentifier: String?) -> Bool {
+        ["com.apple.Safari", "com.google.Chrome"].contains {
+            bundleIdentifier?.caseInsensitiveCompare($0) == .orderedSame
+        }
+    }
+
+    private nonisolated static func isTerminal(_ bundleIdentifier: String?) -> Bool {
+        bundleIdentifier?.caseInsensitiveCompare("com.apple.Terminal") == .orderedSame
+            || isWarp(bundleIdentifier)
+    }
+
+    private nonisolated static func isWarp(_ bundleIdentifier: String?) -> Bool {
+        bundleIdentifier?.caseInsensitiveCompare("dev.warp.Warp-Stable") == .orderedSame
     }
 }
 

@@ -1,22 +1,29 @@
 import Foundation
 import CoreGraphics
 
+public enum PinchTargetAnchor: Equatable, Sendable {
+    case composer, caret, input, prompt
+}
+
 public struct PinchTarget: Equatable, Sendable {
     public let identifier: String
     public let editableFrame: CGRect
     public let attachmentFrame: CGRect
     public let supportsMarker: Bool
+    public let anchor: PinchTargetAnchor
 
     public init(
         identifier: String,
         editableFrame: CGRect = .zero,
         attachmentFrame: CGRect? = nil,
-        supportsMarker: Bool = false
+        supportsMarker: Bool = false,
+        anchor: PinchTargetAnchor? = nil
     ) {
         self.identifier = identifier
         self.editableFrame = editableFrame
         self.attachmentFrame = attachmentFrame ?? editableFrame
         self.supportsMarker = supportsMarker
+        self.anchor = anchor ?? (supportsMarker ? .composer : .input)
     }
 }
 
@@ -69,12 +76,14 @@ public final class PinchSession {
     public private(set) var selectedPhrase: String?
     public private(set) var highlightedPhrase: String?
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
+    public var pickerAnchor: PinchTargetAnchor { target?.anchor ?? .input }
     public var markerFrame: CGRect? { markerTarget?.attachmentFrame }
     private let integration: PinchIntegration
     private let clock: SessionClock
     private var target: PinchTarget?
     private var markerTarget: PinchTarget?
     private var markerTask: Task<Void, Never>?
+    private var deliveryTask: Task<Void, Never>?
 
     public convenience init(integration: PinchIntegration) {
         self.init(integration: integration, clock: ContinuousSessionClock())
@@ -122,23 +131,28 @@ public final class PinchSession {
 
     public func choose(_ phrase: String) {
         guard phase == .open, let target else { return }
-        integration.stopKeyboardMonitor()
-        integration.stopOutsideClickMonitor()
         selectedPhrase = phrase
         phase = .pinching
 
-        Task {
+        deliveryTask = Task { [weak self, clock] in
+            guard let self else { return }
             await clock.sleep(for: .milliseconds(240))
+            guard !Task.isCancelled, phase == .pinching else { return }
+            integration.stopKeyboardMonitor()
+            integration.stopOutsideClickMonitor()
             do {
                 try integration.deliver(phrase, to: target)
                 phase = .delivered
-                await clock.sleep(for: .milliseconds(500))
+                await clock.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled, phase == .delivered else { return }
                 phase = .idle
                 selectedPhrase = nil
                 highlightedPhrase = nil
                 self.target = nil
+                deliveryTask = nil
             } catch {
                 phase = .failed
+                deliveryTask = nil
                 integration.startKeyboardMonitor { [weak self] key in
                     self?.handle(key)
                 }
@@ -150,9 +164,11 @@ public final class PinchSession {
     }
 
     public func cancel() {
-        guard phase == .hovering || phase == .open || phase == .failed else { return }
+        guard phase == .hovering || phase == .open || phase == .pinching || phase == .failed else { return }
         markerTask?.cancel()
         markerTask = nil
+        deliveryTask?.cancel()
+        deliveryTask = nil
         integration.stopKeyboardMonitor()
         integration.stopOutsideClickMonitor()
         target = nil
@@ -162,6 +178,10 @@ public final class PinchSession {
     }
 
     private func handle(_ key: PinchKey) {
+        if phase == .pinching {
+            if key == .escape { cancel() }
+            return
+        }
         guard phase == .open || phase == .failed else { return }
         switch key {
         case .number(let number):
