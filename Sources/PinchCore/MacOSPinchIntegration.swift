@@ -16,10 +16,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     private struct CapturedTargetContext {
         let element: AXUIElement
         let target: PinchTarget
-        let selectedTextRange: AXValue?
         let processIdentifier: pid_t
-        let textValue: String?
-        let placeholderValue: String?
     }
 
     private let systemWide = AXUIElementCreateSystemWide()
@@ -60,19 +57,10 @@ public final class MacOSPinchIntegration: PinchIntegration {
             attachmentFrame: composerSurfaceFrame ?? editorFrame,
             supportsMarker: supportsMarker && composerSurfaceFrame != nil
         )
-        var selectedTextRangeValue: CFTypeRef?
-        AXUIElementCopyAttributeValue(
-            element,
-            kAXSelectedTextRangeAttribute as CFString,
-            &selectedTextRangeValue
-        )
         capturedContext = CapturedTargetContext(
             element: element,
             target: target,
-            selectedTextRange: selectedTextRangeValue as! AXValue?,
-            processIdentifier: processIdentifier,
-            textValue: stringAttribute(of: element, named: kAXValueAttribute),
-            placeholderValue: stringAttribute(of: element, named: kAXPlaceholderValueAttribute)
+            processIdentifier: processIdentifier
         )
         return target
     }
@@ -90,17 +78,16 @@ public final class MacOSPinchIntegration: PinchIntegration {
             ) == .success else {
                 throw IntegrationError.insertionRejected
             }
-            if let selectedTextRange = capturedContext.selectedTextRange {
-                guard AXUIElementSetAttributeValue(
-                    capturedContext.element,
-                    kAXSelectedTextRangeAttribute as CFString,
-                    selectedTextRange
-                ) == .success else {
-                    throw IntegrationError.insertionRejected
-                }
+            let deliveryState = try deliveryState(for: capturedContext.element, inserting: phrase)
+            guard AXUIElementSetAttributeValue(
+                capturedContext.element,
+                kAXSelectedTextRangeAttribute as CFString,
+                deliveryState.selectedTextRange
+            ) == .success else {
+                throw IntegrationError.insertionRejected
             }
             try postText(phrase, to: capturedContext.processIdentifier)
-            guard waitForExpectedText(phrase, in: capturedContext) else {
+            guard waitForExpectedText(deliveryState.expectedText, in: capturedContext.element) else {
                 throw IntegrationError.insertionRejected
             }
             return
@@ -137,25 +124,55 @@ public final class MacOSPinchIntegration: PinchIntegration {
         keyUp.postToPid(processIdentifier)
     }
 
-    private func waitForExpectedText(_ phrase: String, in context: CapturedTargetContext) -> Bool {
-        let rawText = context.textValue ?? ""
-        let text = rawText == context.placeholderValue ? "" : rawText
-        guard let selectedTextRangeValue = context.selectedTextRange else { return false }
+    private func deliveryState(
+        for element: AXUIElement,
+        inserting phrase: String
+    ) throws -> (selectedTextRange: AXValue, expectedText: String) {
+        var selectedTextRangeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedTextRangeValue
+        ) == .success, let selectedTextRange = selectedTextRangeValue as! AXValue? else {
+            throw IntegrationError.insertionRejected
+        }
+        let rawText = stringAttribute(of: element, named: kAXValueAttribute) ?? ""
         var selectedRange = CFRange()
-        guard AXValueGetValue(selectedTextRangeValue, .cfRange, &selectedRange),
+        guard AXValueGetValue(selectedTextRange, .cfRange, &selectedRange),
               selectedRange.location >= 0,
-              selectedRange.length >= 0,
-              selectedRange.location + selectedRange.length <= (text as NSString).length else { return false }
+              selectedRange.length >= 0 else {
+            throw IntegrationError.insertionRejected
+        }
+        let text = Self.chatGPTText(
+            rawValue: rawText,
+            selectionLocation: selectedRange.location,
+            selectionLength: selectedRange.length
+        )
+        guard selectedRange.location + selectedRange.length <= (text as NSString).length else {
+            throw IntegrationError.insertionRejected
+        }
         let expected = (text as NSString).replacingCharacters(
             in: NSRange(location: selectedRange.location, length: selectedRange.length),
             with: phrase
         )
+        return (selectedTextRange, expected)
+    }
+
+    private func waitForExpectedText(_ expected: String, in element: AXUIElement) -> Bool {
         let deadline = ProcessInfo.processInfo.systemUptime + 0.15
         repeat {
-            if stringAttribute(of: context.element, named: kAXValueAttribute) == expected { return true }
+            if stringAttribute(of: element, named: kAXValueAttribute) == expected { return true }
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         } while ProcessInfo.processInfo.systemUptime < deadline
         return false
+    }
+
+    nonisolated static func chatGPTText(
+        rawValue: String,
+        selectionLocation: Int,
+        selectionLength: Int
+    ) -> String {
+        selectionLocation == 0 && selectionLength == 0 && rawValue.hasPrefix("\n") ? "" : rawValue
     }
 
     private func stringAttribute(of element: AXUIElement, named attribute: String) -> String? {

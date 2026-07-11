@@ -33,6 +33,20 @@ func chatGPTComposerFrame() {
     #expect(MacOSPinchIntegration.composerFrame(ancestors: []) == nil)
 }
 
+@Test("ChatGPT's accessible placeholder is not treated as draft text")
+func chatGPTPlaceholderText() {
+    #expect(MacOSPinchIntegration.chatGPTText(
+        rawValue: "\nAsk for follow-up changes",
+        selectionLocation: 0,
+        selectionLength: 0
+    ) == "")
+    #expect(MacOSPinchIntegration.chatGPTText(
+        rawValue: "actual draft",
+        selectionLocation: 0,
+        selectionLength: 0
+    ) == "actual draft")
+}
+
 @MainActor
 @Test("direct Accessibility insertion survives focus moving to the picker")
 func directAccessibilityInsertionSmokeTest() throws {
@@ -93,8 +107,7 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
     let originalValue = accessibilityString(composer, kAXValueAttribute) ?? ""
-    let placeholder = accessibilityString(composer, kAXPlaceholderValueAttribute) ?? ""
-    let originalDraft = originalValue == placeholder ? "" : originalValue
+    let originalDraft = originalValue.hasPrefix("\n") ? "" : originalValue
     let integration = MacOSPinchIntegration()
     let target = try integration.captureTarget()
 
@@ -137,7 +150,7 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     let restored = accessibilityString(composer, kAXValueAttribute)
 
     #expect(inserted?.contains(phrase) == true)
-    #expect(originalDraft.isEmpty ? (restored == placeholder || restored == "") : restored == originalDraft)
+    #expect(originalDraft.isEmpty ? (restored == "" || restored?.hasPrefix("\n") == true) : restored == originalDraft)
 }
 
 private func focusedChatGPTComposer(application: NSRunningApplication) -> AXUIElement? {
