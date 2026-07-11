@@ -13,13 +13,17 @@ public final class MacOSPinchIntegration: PinchIntegration {
         let domClasses: [String]
     }
 
+    private struct CapturedTargetContext {
+        let element: AXUIElement
+        let target: PinchTarget
+        let selectedTextRange: AXValue?
+        let processIdentifier: pid_t
+        let textValue: String?
+        let placeholderValue: String?
+    }
+
     private let systemWide = AXUIElementCreateSystemWide()
-    private var capturedElement: AXUIElement?
-    private var capturedTarget: PinchTarget?
-    private var capturedSelectedTextRange: AXValue?
-    private var capturedProcessIdentifier: pid_t?
-    private var capturedTextValue: String?
-    private var capturedPlaceholderValue: String?
+    private var capturedContext: CapturedTargetContext?
     private var keyboardTap: CFMachPort?
     private var keyboardSource: CFRunLoopSource?
     private var keyboardHandler: (@MainActor (PinchKey) -> Void)?
@@ -31,6 +35,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     public func captureTarget() throws -> PinchTarget {
+        capturedContext = nil
         guard AXIsProcessTrusted() else { throw IntegrationError.accessibilityPermission }
         guard !IsSecureEventInputEnabled() else { throw IntegrationError.noEditableTarget }
         let element = try focusedEditableElement()
@@ -55,51 +60,53 @@ public final class MacOSPinchIntegration: PinchIntegration {
             attachmentFrame: composerSurfaceFrame ?? editorFrame,
             supportsMarker: supportsMarker && composerSurfaceFrame != nil
         )
-        capturedElement = element
-        capturedTarget = target
-        capturedProcessIdentifier = processIdentifier
         var selectedTextRangeValue: CFTypeRef?
         AXUIElementCopyAttributeValue(
             element,
             kAXSelectedTextRangeAttribute as CFString,
             &selectedTextRangeValue
         )
-        capturedSelectedTextRange = selectedTextRangeValue as! AXValue?
-        capturedTextValue = stringAttribute(of: element, named: kAXValueAttribute)
-        capturedPlaceholderValue = stringAttribute(of: element, named: kAXPlaceholderValueAttribute)
+        capturedContext = CapturedTargetContext(
+            element: element,
+            target: target,
+            selectedTextRange: selectedTextRangeValue as! AXValue?,
+            processIdentifier: processIdentifier,
+            textValue: stringAttribute(of: element, named: kAXValueAttribute),
+            placeholderValue: stringAttribute(of: element, named: kAXPlaceholderValueAttribute)
+        )
         return target
     }
 
     public func deliver(_ phrase: String, to target: PinchTarget) throws {
-        guard let capturedElement, let capturedProcessIdentifier, target == capturedTarget else {
+        guard let capturedContext, target == capturedContext.target else {
             throw IntegrationError.targetChanged
         }
         if target.supportsMarker {
             guard !IsSecureEventInputEnabled() else { throw IntegrationError.insertionRejected }
             guard AXUIElementSetAttributeValue(
-                capturedElement,
+                capturedContext.element,
                 kAXFocusedAttribute as CFString,
                 kCFBooleanTrue
             ) == .success else {
                 throw IntegrationError.insertionRejected
             }
-            if let capturedSelectedTextRange {
+            if let selectedTextRange = capturedContext.selectedTextRange {
                 guard AXUIElementSetAttributeValue(
-                    capturedElement,
+                    capturedContext.element,
                     kAXSelectedTextRangeAttribute as CFString,
-                    capturedSelectedTextRange
+                    selectedTextRange
                 ) == .success else {
                     throw IntegrationError.insertionRejected
                 }
             }
-            try postText(phrase, to: capturedProcessIdentifier)
-            guard waitForExpectedText(phrase, in: capturedElement) else {
+            try postText(phrase, to: capturedContext.processIdentifier)
+            guard waitForExpectedText(phrase, in: capturedContext) else {
                 throw IntegrationError.insertionRejected
             }
             return
         }
         guard AXUIElementSetAttributeValue(
-            capturedElement,
+            capturedContext.element,
             kAXSelectedTextAttribute as CFString,
             phrase as CFTypeRef
         ) == .success else {
@@ -130,12 +137,12 @@ public final class MacOSPinchIntegration: PinchIntegration {
         keyUp.postToPid(processIdentifier)
     }
 
-    private func waitForExpectedText(_ phrase: String, in element: AXUIElement) -> Bool {
-        let rawText = capturedTextValue ?? ""
-        let text = rawText == capturedPlaceholderValue ? "" : rawText
-        guard let capturedSelectedTextRange else { return false }
+    private func waitForExpectedText(_ phrase: String, in context: CapturedTargetContext) -> Bool {
+        let rawText = context.textValue ?? ""
+        let text = rawText == context.placeholderValue ? "" : rawText
+        guard let selectedTextRangeValue = context.selectedTextRange else { return false }
         var selectedRange = CFRange()
-        guard AXValueGetValue(capturedSelectedTextRange, .cfRange, &selectedRange),
+        guard AXValueGetValue(selectedTextRangeValue, .cfRange, &selectedRange),
               selectedRange.location >= 0,
               selectedRange.length >= 0,
               selectedRange.location + selectedRange.length <= (text as NSString).length else { return false }
@@ -145,7 +152,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
         )
         let deadline = ProcessInfo.processInfo.systemUptime + 0.15
         repeat {
-            if stringAttribute(of: element, named: kAXValueAttribute) == expected { return true }
+            if stringAttribute(of: context.element, named: kAXValueAttribute) == expected { return true }
             RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         } while ProcessInfo.processInfo.systemUptime < deadline
         return false
