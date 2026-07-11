@@ -51,7 +51,7 @@ func markerClickActivation() async {
     await Task.yield()
     #expect(await clock.nextDuration() == .milliseconds(120))
     await clock.advance()
-    await Task.yield()
+    while session.phase == .hovering { await Task.yield() }
 
     #expect(session.phase == .open)
     #expect(session.attachmentFrame == composerFrame)
@@ -71,7 +71,7 @@ func markerHoverActivation() async {
     await Task.yield()
     #expect(await clock.nextDuration() == .milliseconds(300))
     await clock.advance()
-    await Task.yield()
+    while session.phase == .hovering { await Task.yield() }
 
     #expect(session.phase == .open)
 }
@@ -131,6 +131,38 @@ func outsideClickDismissesOpenPicker() {
     #expect(session.phase == .idle)
     #expect(!integration.isMonitoringKeyboard)
     #expect(!integration.isMonitoringOutsideClicks)
+}
+
+@MainActor
+@Test("a marker preparation miss remains retryable")
+func markerPreparationMissCanRetry() async {
+    let integration = TestIntegration()
+    integration.currentTarget = PinchTarget(
+        identifier: "chatgpt-composer",
+        supportsMarker: true
+    )
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.refreshMarker()
+    session.beginMarkerHover()
+    await Task.yield()
+    #expect(await clock.nextDuration() == .milliseconds(300))
+
+    integration.shouldFailPrepare = true
+    session.activateMarker()
+    #expect(session.phase == .idle)
+    await clock.advance()
+    await Task.yield()
+    #expect(session.phase == .idle)
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
+
+    integration.shouldFailPrepare = false
+    session.activateMarker()
+
+    #expect(session.phase == .hovering)
+    session.cancel()
 }
 
 @MainActor

@@ -187,7 +187,7 @@ public final class PinchSession {
     public func recover() {
         guard phase == .failed else { return }
         guard let target else {
-            phase = .idle
+            cancel()
             return
         }
         do {
@@ -200,14 +200,15 @@ public final class PinchSession {
 
     private func beginMarkerActivation(after delay: Duration) {
         guard (phase == .idle || phase == .hovering), let markerTarget else { return }
+        markerTask?.cancel()
+        markerTask = nil
         do {
             try integration.prepareDelivery(to: markerTarget)
         } catch {
             target = nil
-            phase = .failed
+            phase = .idle
             return
         }
-        markerTask?.cancel()
         target = markerTarget
         phase = .hovering
         markerTask = Task { [weak self, clock] in
