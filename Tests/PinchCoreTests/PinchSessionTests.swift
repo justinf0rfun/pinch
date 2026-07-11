@@ -10,8 +10,8 @@ func markerHoverCancellation() async {
     let composerFrame = CGRect(x: 0, y: 8, width: 324, height: 96)
     integration.currentTarget = PinchTarget(
         identifier: "codex-composer",
-        frame: editorFrame,
-        visualFrame: composerFrame,
+        editableFrame: editorFrame,
+        attachmentFrame: composerFrame,
         supportsMarker: true
     )
     let clock = TestClock()
@@ -37,8 +37,8 @@ func markerClickActivation() async {
     let composerFrame = CGRect(x: 0, y: 8, width: 324, height: 96)
     integration.currentTarget = PinchTarget(
         identifier: "codex-composer",
-        frame: CGRect(x: 10, y: 20, width: 300, height: 44),
-        visualFrame: composerFrame,
+        editableFrame: CGRect(x: 10, y: 20, width: 300, height: 44),
+        attachmentFrame: composerFrame,
         supportsMarker: true
     )
     let clock = TestClock()
@@ -53,7 +53,7 @@ func markerClickActivation() async {
     await Task.yield()
 
     #expect(session.phase == .open)
-    #expect(session.targetFrame == composerFrame)
+    #expect(session.attachmentFrame == composerFrame)
     #expect(integration.isMonitoringKeyboard)
 }
 

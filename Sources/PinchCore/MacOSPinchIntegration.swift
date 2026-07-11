@@ -8,9 +8,18 @@ public final class MacOSPinchIntegration: PinchIntegration {
         case accessibilityPermission, noEditableTarget, targetChanged, insertionRejected
     }
 
+    struct AccessibilityAncestor: Equatable, Sendable {
+        let frame: CGRect
+        let domClasses: [String]
+    }
+
     private let systemWide = AXUIElementCreateSystemWide()
     private var capturedElement: AXUIElement?
     private var capturedTarget: PinchTarget?
+    private var capturedSelectedTextRange: AXValue?
+    private var capturedProcessIdentifier: pid_t?
+    private var capturedTextValue: String?
+    private var capturedPlaceholderValue: String?
     private var keyboardTap: CFMachPort?
     private var keyboardSource: CFRunLoopSource?
     private var keyboardHandler: (@MainActor (PinchKey) -> Void)?
@@ -39,27 +48,55 @@ public final class MacOSPinchIntegration: PinchIntegration {
             role: roleValue as? String,
             domClasses: domClassesValue as? [String] ?? []
         )
+        let composerSurfaceFrame = supportsMarker ? composerFrame(of: element) : nil
         let target = PinchTarget(
             identifier: UUID().uuidString,
-            frame: editorFrame,
-            visualFrame: supportsMarker ? composerFrame(of: element, editorFrame: editorFrame) : editorFrame,
-            supportsMarker: supportsMarker
+            editableFrame: editorFrame,
+            attachmentFrame: composerSurfaceFrame ?? editorFrame,
+            supportsMarker: supportsMarker && composerSurfaceFrame != nil
         )
         capturedElement = element
         capturedTarget = target
+        capturedProcessIdentifier = processIdentifier
+        var selectedTextRangeValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedTextRangeValue
+        )
+        capturedSelectedTextRange = selectedTextRangeValue as! AXValue?
+        capturedTextValue = stringAttribute(of: element, named: kAXValueAttribute)
+        capturedPlaceholderValue = stringAttribute(of: element, named: kAXPlaceholderValueAttribute)
         return target
     }
 
     public func deliver(_ phrase: String, to target: PinchTarget) throws {
-        guard let capturedElement, target == capturedTarget else {
+        guard let capturedElement, let capturedProcessIdentifier, target == capturedTarget else {
             throw IntegrationError.targetChanged
         }
-        guard AXUIElementSetAttributeValue(
-            capturedElement,
-            kAXFocusedAttribute as CFString,
-            kCFBooleanTrue
-        ) == .success else {
-            throw IntegrationError.insertionRejected
+        if target.supportsMarker {
+            guard !IsSecureEventInputEnabled() else { throw IntegrationError.insertionRejected }
+            guard AXUIElementSetAttributeValue(
+                capturedElement,
+                kAXFocusedAttribute as CFString,
+                kCFBooleanTrue
+            ) == .success else {
+                throw IntegrationError.insertionRejected
+            }
+            if let capturedSelectedTextRange {
+                guard AXUIElementSetAttributeValue(
+                    capturedElement,
+                    kAXSelectedTextRangeAttribute as CFString,
+                    capturedSelectedTextRange
+                ) == .success else {
+                    throw IntegrationError.insertionRejected
+                }
+            }
+            try postText(phrase, to: capturedProcessIdentifier)
+            guard waitForExpectedText(phrase, in: capturedElement) else {
+                throw IntegrationError.insertionRejected
+            }
+            return
         }
         guard AXUIElementSetAttributeValue(
             capturedElement,
@@ -68,6 +105,60 @@ public final class MacOSPinchIntegration: PinchIntegration {
         ) == .success else {
             throw IntegrationError.insertionRejected
         }
+    }
+
+    private func postText(_ text: String, to processIdentifier: pid_t) throws {
+        guard let source = CGEventSource(stateID: .combinedSessionState),
+              let keyDown = CGEvent(
+                  keyboardEventSource: source,
+                  virtualKey: 0,
+                  keyDown: true
+              ),
+              let keyUp = CGEvent(
+                  keyboardEventSource: source,
+                  virtualKey: 0,
+                  keyDown: false
+              ) else { throw IntegrationError.insertionRejected }
+        let characters = Array(text.utf16)
+        characters.withUnsafeBufferPointer { buffer in
+            keyDown.keyboardSetUnicodeString(
+                stringLength: buffer.count,
+                unicodeString: buffer.baseAddress
+            )
+        }
+        keyDown.postToPid(processIdentifier)
+        keyUp.postToPid(processIdentifier)
+    }
+
+    private func waitForExpectedText(_ phrase: String, in element: AXUIElement) -> Bool {
+        let rawText = capturedTextValue ?? ""
+        let text = rawText == capturedPlaceholderValue ? "" : rawText
+        guard let capturedSelectedTextRange else { return false }
+        var selectedRange = CFRange()
+        guard AXValueGetValue(capturedSelectedTextRange, .cfRange, &selectedRange),
+              selectedRange.location >= 0,
+              selectedRange.length >= 0,
+              selectedRange.location + selectedRange.length <= (text as NSString).length else { return false }
+        let expected = (text as NSString).replacingCharacters(
+            in: NSRange(location: selectedRange.location, length: selectedRange.length),
+            with: phrase
+        )
+        let deadline = ProcessInfo.processInfo.systemUptime + 0.15
+        repeat {
+            if stringAttribute(of: element, named: kAXValueAttribute) == expected { return true }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return false
+    }
+
+    private func stringAttribute(of element: AXUIElement, named attribute: String) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            element,
+            attribute as CFString,
+            &value
+        ) == .success else { return nil }
+        return value as? String
     }
 
     public func startKeyboardMonitor(_ handler: @escaping @MainActor (PinchKey) -> Void) {
@@ -142,9 +233,9 @@ public final class MacOSPinchIntegration: PinchIntegration {
         return CGRect(origin: position, size: size)
     }
 
-    private func composerFrame(of element: AXUIElement, editorFrame: CGRect) -> CGRect {
+    private func composerFrame(of element: AXUIElement) -> CGRect? {
         var current = element
-        var ancestors: [(frame: CGRect, domClasses: [String])] = []
+        var ancestors: [AccessibilityAncestor] = []
         for _ in 0..<8 {
             var parentValue: CFTypeRef?
             guard AXUIElementCopyAttributeValue(
@@ -154,17 +245,19 @@ public final class MacOSPinchIntegration: PinchIntegration {
             ) == .success, let parent = parentValue as! AXUIElement? else { break }
             var domClassesValue: CFTypeRef?
             AXUIElementCopyAttributeValue(parent, kAXDOMClassListAttribute as CFString, &domClassesValue)
-            ancestors.append((frame(of: parent), domClassesValue as? [String] ?? []))
+            ancestors.append(AccessibilityAncestor(
+                frame: frame(of: parent),
+                domClasses: domClassesValue as? [String] ?? []
+            ))
             current = parent
         }
-        return Self.composerFrame(editorFrame: editorFrame, ancestors: ancestors)
+        return Self.composerFrame(ancestors: ancestors)
     }
 
     nonisolated static func composerFrame(
-        editorFrame: CGRect,
-        ancestors: [(frame: CGRect, domClasses: [String])]
-    ) -> CGRect {
-        ancestors.first { $0.domClasses.contains("composer-surface-chrome") }?.frame ?? editorFrame
+        ancestors: [AccessibilityAncestor]
+    ) -> CGRect? {
+        ancestors.first { $0.domClasses.contains("composer-surface-chrome") }?.frame
     }
 
     fileprivate nonisolated static func pinchKey(for keyCode: Int) -> PinchKey? {

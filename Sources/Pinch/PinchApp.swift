@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openPinch() {
         session.open()
         guard session.phase == .open else { return }
-        panel.show(near: session.targetFrame)
+        panel.show(near: session.attachmentFrame)
     }
 
     private func updateMarker() {
@@ -68,10 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         marker.show(near: markerFrame)
         if session.phase == .open || session.phase == .pinching || session.phase == .failed {
-            panel.show(near: session.targetFrame)
+            panel.show(near: session.attachmentFrame)
         }
         if session.phase == .pinching || session.phase == .delivered || session.phase == .failed {
-            delivery.show(from: panel.frame, to: session.targetFrame)
+            delivery.show(from: panel.frame, to: session.attachmentFrame)
         } else {
             delivery.close()
         }
