@@ -9,7 +9,15 @@ Build the production app and run all tests with one command:
 swift test
 ```
 
-Run the app with `swift run Pinch`, then choose **Open Test Composer** from the
-menu bar. The production UI uses the selected A-style edge list. The old
+Run the app with `swift run Pinch`, then press **Option-Space** while an
+editable, non-secure text field is focused. Pinch inserts the selected phrase
+through macOS Accessibility without submitting it. The old
 `Sources/PinchPrototype` code remains only as throwaway interaction evidence
 and is not part of the package build.
+
+The permission-gated native text-field smoke test can be run from an
+Accessibility-authorized terminal with:
+
+```sh
+PINCH_RUN_AX_SMOKE=1 swift test --filter directAccessibilityInsertionSmokeTest
+```
