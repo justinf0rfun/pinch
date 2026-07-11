@@ -179,7 +179,18 @@ public final class PinchSession {
 
     public func recover() {
         guard phase == .failed else { return }
-        phase = target == nil ? .idle : .open
+        guard let target else {
+            phase = .idle
+            return
+        }
+        do {
+            try integration.prepareDelivery(to: target)
+            phase = .open
+        } catch {
+            integration.stopKeyboardMonitor()
+            self.target = nil
+            phase = .idle
+        }
     }
 
     private func beginMarkerActivation(after delay: Duration) {

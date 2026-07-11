@@ -219,6 +219,7 @@ func failedSessionCanRecover() async {
 
     session.recover()
     #expect(session.phase == .open)
+    #expect(target.prepareCount == 2)
     target.shouldFail = false
     session.choose(PinchSession.builtInPhrases[0])
     await clock.advance()

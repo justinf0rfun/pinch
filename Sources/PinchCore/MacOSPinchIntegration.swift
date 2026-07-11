@@ -98,11 +98,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
             guard let preparedDelivery = capturedContext.preparedDelivery else {
                 throw IntegrationError.insertionRejected
             }
-            let expectedText = try expectedChatGPTDraft(
-                for: capturedContext.element,
-                preparedDelivery: preparedDelivery,
-                inserting: phrase
-            )
             guard let application = NSRunningApplication(
                 processIdentifier: capturedContext.processIdentifier
             ), application.activate() else { throw IntegrationError.insertionRejected }
@@ -123,6 +118,11 @@ public final class MacOSPinchIntegration: PinchIntegration {
                 preparedDelivery.selectedTextMarkerRange,
                 in: capturedContext.element
             ) else { throw IntegrationError.insertionRejected }
+            let expectedText = try expectedChatGPTDraft(
+                for: capturedContext.element,
+                preparedDelivery: preparedDelivery,
+                inserting: phrase
+            )
             try postText(phrase, to: capturedContext.processIdentifier)
             guard waitForExpectedText(expectedText, in: capturedContext.element) else {
                 throw IntegrationError.insertionRejected

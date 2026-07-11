@@ -46,9 +46,11 @@ func chatGPTPlaceholderText() {
 }
 
 @MainActor
-@Test("direct Accessibility insertion survives focus moving to the picker")
+@Test(
+    "direct Accessibility insertion survives focus moving to the picker",
+    .enabled(if: ProcessInfo.processInfo.environment["PINCH_RUN_AX_SMOKE"] == "1")
+)
 func directAccessibilityInsertionSmokeTest() throws {
-    guard ProcessInfo.processInfo.environment["PINCH_RUN_AX_SMOKE"] == "1" else { return }
     guard AXIsProcessTrusted() else { throw MacOSPinchIntegration.IntegrationError.accessibilityPermission }
     let application = NSApplication.shared
     application.setActivationPolicy(.regular)
@@ -84,9 +86,11 @@ func directAccessibilityInsertionSmokeTest() throws {
 }
 
 @MainActor
-@Test("ChatGPT ProseMirror replaces the captured selection after picker focus")
+@Test(
+    "ChatGPT ProseMirror replaces the captured selection after picker focus",
+    .enabled(if: ProcessInfo.processInfo.environment["PINCH_RUN_CHATGPT_AX_SMOKE"] == "1")
+)
 func chatGPTAccessibilityInsertionSmokeTest() throws {
-    guard ProcessInfo.processInfo.environment["PINCH_RUN_CHATGPT_AX_SMOKE"] == "1" else { return }
     guard AXIsProcessTrusted() else { throw MacOSPinchIntegration.IntegrationError.accessibilityPermission }
     guard let chatGPT = NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex").first else {
         throw MacOSPinchIntegration.IntegrationError.noEditableTarget
@@ -109,11 +113,19 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     var didRestoreDraft = false
     defer {
         if !didRestoreDraft {
-            try? restoreChatGPTComposer(
-                composer,
-                processIdentifier: chatGPT.processIdentifier,
-                draft: originalDraft
-            )
+            do {
+                try restoreChatGPTComposer(
+                    composer,
+                    processIdentifier: chatGPT.processIdentifier,
+                    draft: originalDraft
+                )
+                RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+                if !composerMatchesDraft(composer, draft: originalDraft) {
+                    Issue.record("Failed to restore the original ChatGPT draft")
+                }
+            } catch {
+                Issue.record("Failed to restore the original ChatGPT draft: \(error)")
+            }
         }
     }
 
@@ -159,12 +171,11 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
         processIdentifier: chatGPT.processIdentifier,
         draft: originalDraft
     )
-    didRestoreDraft = true
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-    let restored = accessibilityString(composer, kAXValueAttribute)
+    didRestoreDraft = composerMatchesDraft(composer, draft: originalDraft)
 
     #expect(inserted == "before \(phrase) after")
-    #expect(originalDraft.isEmpty ? composerContainsDOMClass("placeholder", below: composer) : restored == originalDraft)
+    #expect(didRestoreDraft)
 }
 
 private func focusedChatGPTComposer(application: NSRunningApplication) -> AXUIElement? {
@@ -200,6 +211,12 @@ private func accessibilityString(_ element: AXUIElement, _ attribute: String) ->
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
     return value as? String
+}
+
+private func composerMatchesDraft(_ element: AXUIElement, draft: String) -> Bool {
+    draft.isEmpty
+        ? composerContainsDOMClass("placeholder", below: element)
+        : accessibilityString(element, kAXValueAttribute) == draft
 }
 
 private func selectChatGPTText(
