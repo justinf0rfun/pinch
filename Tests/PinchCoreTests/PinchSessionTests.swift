@@ -2,6 +2,65 @@ import Testing
 @testable import PinchCore
 
 @MainActor
+@Test("leaving the Codex marker before its dwell cancels reveal")
+func markerHoverCancellation() async {
+    let integration = TestIntegration()
+    integration.currentTarget = PinchTarget(identifier: "codex-composer", frame: .init(x: 10, y: 20, width: 300, height: 80), supportsMarker: true)
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.refreshMarker()
+    #expect(session.markerFrame == integration.currentTarget?.frame)
+    session.beginMarkerHover()
+    #expect(session.phase == .hovering)
+    session.endMarkerHover()
+    await Task.yield()
+    await clock.advance()
+    await Task.yield()
+
+    #expect(session.phase == .idle)
+    #expect(!integration.isMonitoringKeyboard)
+}
+
+@MainActor
+@Test("clicking the Codex marker performs a pre-pinch and opens the picker")
+func markerClickActivation() async {
+    let integration = TestIntegration()
+    integration.currentTarget = PinchTarget(identifier: "codex-composer", supportsMarker: true)
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.refreshMarker()
+    session.activateMarker()
+    #expect(session.phase == .hovering)
+    await Task.yield()
+    #expect(await clock.nextDuration() == .milliseconds(120))
+    await clock.advance()
+    await Task.yield()
+
+    #expect(session.phase == .open)
+    #expect(integration.isMonitoringKeyboard)
+}
+
+@MainActor
+@Test("remaining over the Codex marker for 300 ms opens the picker")
+func markerHoverActivation() async {
+    let integration = TestIntegration()
+    integration.currentTarget = PinchTarget(identifier: "codex-composer", supportsMarker: true)
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.refreshMarker()
+    session.beginMarkerHover()
+    await Task.yield()
+    #expect(await clock.nextDuration() == .milliseconds(300))
+    await clock.advance()
+    await Task.yield()
+
+    #expect(session.phase == .open)
+}
+
+@MainActor
 @Test("a session does not open while secure input is active")
 func secureInputIsRejected() {
     let integration = TestIntegration()
@@ -113,6 +172,7 @@ func successfulSession() async throws {
     #expect(session.phase == .pinching)
 
     await Task.yield()
+    #expect(await clock.nextDuration() == .milliseconds(240))
     await clock.advance()
     await Task.yield()
     #expect(session.phase == .delivered)
@@ -191,14 +251,19 @@ private final class TestIntegration: PinchIntegration {
 }
 
 private actor TestClock: SessionClock {
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [(Duration, CheckedContinuation<Void, Never>)] = []
 
     func sleep(for duration: Duration) async {
-        await withCheckedContinuation { waiters.append($0) }
+        await withCheckedContinuation { waiters.append((duration, $0)) }
     }
 
     func advance() async {
         while waiters.isEmpty { await Task.yield() }
-        waiters.removeFirst().resume()
+        waiters.removeFirst().1.resume()
+    }
+
+    func nextDuration() async -> Duration {
+        while waiters.isEmpty { await Task.yield() }
+        return waiters[0].0
     }
 }

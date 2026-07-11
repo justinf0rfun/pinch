@@ -25,7 +25,23 @@ public final class MacOSPinchIntegration: PinchIntegration {
         guard AXIsProcessTrusted() else { throw IntegrationError.accessibilityPermission }
         guard !IsSecureEventInputEnabled() else { throw IntegrationError.noEditableTarget }
         let element = try focusedEditableElement()
-        let target = PinchTarget(identifier: UUID().uuidString, frame: frame(of: element))
+        var processIdentifier: pid_t = 0
+        AXUIElementGetPid(element, &processIdentifier)
+        let application = NSRunningApplication(processIdentifier: processIdentifier)
+        var roleValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
+        var domClassesValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXDOMClassListAttribute as CFString, &domClassesValue)
+        let target = PinchTarget(
+            identifier: UUID().uuidString,
+            frame: frame(of: element),
+            supportsMarker: Self.supportsMarker(
+                bundleIdentifier: application?.bundleIdentifier,
+                applicationName: application?.localizedName,
+                role: roleValue as? String,
+                domClasses: domClassesValue as? [String] ?? []
+            )
+        )
         capturedElement = element
         capturedTarget = target
         return target
@@ -129,6 +145,17 @@ public final class MacOSPinchIntegration: PinchIntegration {
         case 53: return .escape
         default: return nil
         }
+    }
+
+    nonisolated static func supportsMarker(
+        bundleIdentifier: String?,
+        applicationName: String?,
+        role: String?,
+        domClasses: [String]
+    ) -> Bool {
+        guard role == kAXTextAreaRole as String, domClasses.contains("ProseMirror") else { return false }
+        return bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
+            || applicationName?.caseInsensitiveCompare("Codex") == .orderedSame
     }
 }
 

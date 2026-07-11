@@ -4,10 +4,12 @@ import CoreGraphics
 public struct PinchTarget: Equatable, Sendable {
     public let identifier: String
     public let frame: CGRect
+    public let supportsMarker: Bool
 
-    public init(identifier: String, frame: CGRect = .zero) {
+    public init(identifier: String, frame: CGRect = .zero, supportsMarker: Bool = false) {
         self.identifier = identifier
         self.frame = frame
+        self.supportsMarker = supportsMarker
     }
 }
 
@@ -37,7 +39,7 @@ private struct ContinuousSessionClock: SessionClock {
 @Observable
 public final class PinchSession {
     public enum Phase: Equatable {
-        case idle, open, pinching, delivered, failed
+        case idle, hovering, open, pinching, delivered, failed
     }
 
     public static let builtInPhrases = [
@@ -53,9 +55,12 @@ public final class PinchSession {
     public private(set) var selectedPhrase: String?
     public private(set) var highlightedPhrase: String?
     public var targetFrame: CGRect { target?.frame ?? .zero }
+    public var markerFrame: CGRect? { markerTarget?.frame }
     private let integration: PinchIntegration
     private let clock: SessionClock
     private var target: PinchTarget?
+    private var markerTarget: PinchTarget?
+    private var markerTask: Task<Void, Never>?
 
     public convenience init(integration: PinchIntegration) {
         self.init(integration: integration, clock: ContinuousSessionClock())
@@ -70,15 +75,33 @@ public final class PinchSession {
         guard phase == .idle else { return }
         do {
             target = try integration.captureTarget()
-            highlightedPhrase = Self.builtInPhrases.first
-            phase = .open
-            integration.startKeyboardMonitor { [weak self] key in
-                self?.handle(key)
-            }
+            finishOpening()
         } catch {
             target = nil
             phase = .failed
         }
+    }
+
+    public func refreshMarker() {
+        guard phase == .idle else { return }
+        markerTarget = try? integration.captureTarget()
+        if markerTarget?.supportsMarker != true { markerTarget = nil }
+    }
+
+    public func beginMarkerHover() {
+        beginMarkerActivation(after: .milliseconds(300))
+    }
+
+    public func activateMarker() {
+        beginMarkerActivation(after: .milliseconds(120))
+    }
+
+    public func endMarkerHover() {
+        guard phase == .hovering else { return }
+        markerTask?.cancel()
+        markerTask = nil
+        target = nil
+        phase = .idle
     }
 
     public func choose(_ phrase: String) {
@@ -107,7 +130,9 @@ public final class PinchSession {
     }
 
     public func cancel() {
-        guard phase == .open || phase == .failed else { return }
+        guard phase == .hovering || phase == .open || phase == .failed else { return }
+        markerTask?.cancel()
+        markerTask = nil
         integration.stopKeyboardMonitor()
         target = nil
         selectedPhrase = nil
@@ -141,5 +166,26 @@ public final class PinchSession {
     public func recover() {
         guard phase == .failed else { return }
         phase = target == nil ? .idle : .open
+    }
+
+    private func beginMarkerActivation(after delay: Duration) {
+        guard (phase == .idle || phase == .hovering), let markerTarget else { return }
+        markerTask?.cancel()
+        target = markerTarget
+        phase = .hovering
+        markerTask = Task { [weak self, clock] in
+            await clock.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.finishOpening()
+        }
+    }
+
+    private func finishOpening() {
+        markerTask = nil
+        highlightedPhrase = Self.builtInPhrases.first
+        phase = .open
+        integration.startKeyboardMonitor { [weak self] key in
+            self?.handle(key)
+        }
     }
 }
