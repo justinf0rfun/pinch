@@ -187,9 +187,7 @@ public final class PinchSession {
             try integration.prepareDelivery(to: target)
             phase = .open
         } catch {
-            integration.stopKeyboardMonitor()
-            self.target = nil
-            phase = .idle
+            cancel()
         }
     }
 

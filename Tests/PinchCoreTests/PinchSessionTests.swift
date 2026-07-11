@@ -228,9 +228,32 @@ func failedSessionCanRecover() async {
 }
 
 @MainActor
+@Test("failed selection refresh cancels the session cleanly")
+func failedSelectionRefreshCancelsSession() async {
+    let target = TestIntegration()
+    target.shouldFail = true
+    let clock = TestClock()
+    let session = PinchSession(integration: target, clock: clock)
+
+    session.open()
+    session.choose(PinchSession.builtInPhrases[0])
+    await clock.advance()
+    while session.phase == .pinching { await Task.yield() }
+    target.shouldFailPrepare = true
+
+    session.recover()
+
+    #expect(session.phase == .idle)
+    #expect(session.selectedPhrase == nil)
+    #expect(session.highlightedPhrase == nil)
+    #expect(!target.isMonitoringKeyboard)
+}
+
+@MainActor
 private final class TestIntegration: PinchIntegration {
     var text = ""
     var shouldFail = false
+    var shouldFailPrepare = false
     var captureCount = 0
     var prepareCount = 0
     var secureInputIsActive = false
@@ -246,6 +269,7 @@ private final class TestIntegration: PinchIntegration {
     }
 
     func prepareDelivery(to target: PinchTarget) throws {
+        guard !shouldFailPrepare else { throw DeliveryError.rejected }
         prepareCount += 1
     }
 
