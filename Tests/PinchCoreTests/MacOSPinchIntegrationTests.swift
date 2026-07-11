@@ -35,12 +35,12 @@ func chatGPTComposerFrame() {
 
 @Test("ChatGPT's accessible placeholder is not treated as draft text")
 func chatGPTPlaceholderText() {
-    #expect(MacOSPinchIntegration.chatGPTText(
+    #expect(MacOSPinchIntegration.normalizedChatGPTDraftText(
         rawValue: "\nAsk for follow-up changes",
         selectionLocation: 0,
         selectionLength: 0
     ) == "")
-    #expect(MacOSPinchIntegration.chatGPTText(
+    #expect(MacOSPinchIntegration.normalizedChatGPTDraftText(
         rawValue: "actual draft",
         selectionLocation: 0,
         selectionLength: 0

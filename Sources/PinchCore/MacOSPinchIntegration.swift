@@ -143,7 +143,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
               selectedRange.length >= 0 else {
             throw IntegrationError.insertionRejected
         }
-        let text = Self.chatGPTText(
+        let text = Self.normalizedChatGPTDraftText(
             rawValue: rawText,
             selectionLocation: selectedRange.location,
             selectionLength: selectedRange.length
@@ -167,7 +167,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
         return false
     }
 
-    nonisolated static func chatGPTText(
+    nonisolated static func normalizedChatGPTDraftText(
         rawValue: String,
         selectionLocation: Int,
         selectionLength: Int
