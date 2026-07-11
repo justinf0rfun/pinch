@@ -32,6 +32,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     private var keyboardTap: CFMachPort?
     private var keyboardSource: CFRunLoopSource?
     private var keyboardHandler: (@MainActor (PinchKey) -> Void)?
+    private var outsideClickMonitor: Any?
 
     public init() {}
 
@@ -332,6 +333,20 @@ public final class MacOSPinchIntegration: PinchIntegration {
         keyboardSource = nil
         keyboardTap = nil
         keyboardHandler = nil
+    }
+
+    public func startOutsideClickMonitor(_ handler: @escaping @MainActor () -> Void) {
+        stopOutsideClickMonitor()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { _ in
+            MainActor.assumeIsolated { handler() }
+        }
+    }
+
+    public func stopOutsideClickMonitor() {
+        if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+        outsideClickMonitor = nil
     }
 
     fileprivate func handleKey(_ key: PinchKey) {

@@ -31,6 +31,8 @@ public protocol PinchIntegration: AnyObject {
     func deliver(_ phrase: String, to target: PinchTarget) throws
     func startKeyboardMonitor(_ handler: @escaping @MainActor (PinchKey) -> Void)
     func stopKeyboardMonitor()
+    func startOutsideClickMonitor(_ handler: @escaping @MainActor () -> Void)
+    func stopOutsideClickMonitor()
 }
 
 public extension PinchIntegration {
@@ -92,7 +94,7 @@ public final class PinchSession {
             finishOpening()
         } catch {
             target = nil
-            phase = .failed
+            phase = .idle
         }
     }
 
@@ -121,6 +123,7 @@ public final class PinchSession {
     public func choose(_ phrase: String) {
         guard phase == .open, let target else { return }
         integration.stopKeyboardMonitor()
+        integration.stopOutsideClickMonitor()
         selectedPhrase = phrase
         phase = .pinching
 
@@ -139,6 +142,9 @@ public final class PinchSession {
                 integration.startKeyboardMonitor { [weak self] key in
                     self?.handle(key)
                 }
+                integration.startOutsideClickMonitor { [weak self] in
+                    self?.cancel()
+                }
             }
         }
     }
@@ -148,6 +154,7 @@ public final class PinchSession {
         markerTask?.cancel()
         markerTask = nil
         integration.stopKeyboardMonitor()
+        integration.stopOutsideClickMonitor()
         target = nil
         selectedPhrase = nil
         highlightedPhrase = nil
@@ -216,6 +223,9 @@ public final class PinchSession {
         phase = .open
         integration.startKeyboardMonitor { [weak self] key in
             self?.handle(key)
+        }
+        integration.startOutsideClickMonitor { [weak self] in
+            self?.cancel()
         }
     }
 }

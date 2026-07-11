@@ -77,7 +77,7 @@ func markerHoverActivation() async {
 }
 
 @MainActor
-@Test("a session does not open while secure input is active")
+@Test("secure input does not latch an invisible session failure")
 func secureInputIsRejected() {
     let integration = TestIntegration()
     integration.secureInputIsActive = true
@@ -85,8 +85,52 @@ func secureInputIsRejected() {
 
     session.open()
 
-    #expect(session.phase == .failed)
+    #expect(session.phase == .idle)
     #expect(!integration.isMonitoringKeyboard)
+}
+
+@MainActor
+@Test("returning to ChatGPT restores the marker and global shortcut")
+func appSwitchRestoresMarkerAndShortcut() {
+    let integration = TestIntegration()
+    integration.currentTarget = nil
+    let session = PinchSession(integration: integration)
+
+    session.open()
+    #expect(session.phase == .idle)
+
+    let composerFrame = CGRect(x: 10, y: 20, width: 300, height: 96)
+    integration.currentTarget = PinchTarget(
+        identifier: "chatgpt-composer",
+        editableFrame: composerFrame,
+        attachmentFrame: composerFrame,
+        supportsMarker: true
+    )
+    session.refreshMarker()
+    #expect(session.markerFrame == composerFrame)
+
+    session.open()
+
+    #expect(session.phase == .open)
+    #expect(integration.captureCount == 3)
+    #expect(integration.isMonitoringKeyboard)
+}
+
+@MainActor
+@Test("clicking outside an open picker dismisses the session")
+func outsideClickDismissesOpenPicker() {
+    let integration = TestIntegration()
+    let session = PinchSession(integration: integration)
+
+    session.open()
+    #expect(session.phase == .open)
+    #expect(integration.isMonitoringOutsideClicks)
+
+    integration.clickOutside()
+
+    #expect(session.phase == .idle)
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
 }
 
 @MainActor
@@ -101,6 +145,7 @@ func numberedSelection() async {
     integration.press(.number(4))
     #expect(session.phase == .pinching)
     #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
 
     await Task.yield()
     await clock.advance()
@@ -191,13 +236,13 @@ func successfulSession() async throws {
     await Task.yield()
     #expect(await clock.nextDuration() == .milliseconds(240))
     await clock.advance()
-    await Task.yield()
+    while session.phase == .pinching { await Task.yield() }
     #expect(session.phase == .delivered)
     #expect(target.text == "按你的最佳判断继续")
 
     await Task.yield()
     await clock.advance()
-    await Task.yield()
+    while session.phase == .delivered { await Task.yield() }
     #expect(session.phase == .idle)
 }
 
@@ -259,7 +304,9 @@ private final class TestIntegration: PinchIntegration {
     var secureInputIsActive = false
     var currentTarget: PinchTarget? = PinchTarget(identifier: "test-composer")
     var isMonitoringKeyboard = false
+    var isMonitoringOutsideClicks = false
     private var keyboardHandler: (@MainActor (PinchKey) -> Void)?
+    private var outsideClickHandler: (@MainActor () -> Void)?
 
     func captureTarget() throws -> PinchTarget {
         captureCount += 1
@@ -290,8 +337,22 @@ private final class TestIntegration: PinchIntegration {
         isMonitoringKeyboard = false
     }
 
+    func startOutsideClickMonitor(_ handler: @escaping @MainActor () -> Void) {
+        outsideClickHandler = handler
+        isMonitoringOutsideClicks = true
+    }
+
+    func stopOutsideClickMonitor() {
+        outsideClickHandler = nil
+        isMonitoringOutsideClicks = false
+    }
+
     func press(_ key: PinchKey) {
         keyboardHandler?(key)
+    }
+
+    func clickOutside() {
+        outsideClickHandler?()
     }
 
     private enum DeliveryError: Error { case rejected }
