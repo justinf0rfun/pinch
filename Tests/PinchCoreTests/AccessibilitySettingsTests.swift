@@ -7,12 +7,14 @@ func permissionTransitions() {
     var settings = AccessibilitySettings(isTrusted: { trusted })
 
     #expect(settings.status == .notGranted)
+    #expect(settings.activationDecision == .showPermissionRecovery)
     settings.didReturnFromSystemSettings()
     #expect(settings.status == .notGrantedAfterSettings)
 
     trusted = true
     settings.refresh()
     #expect(settings.status == .granted)
+    #expect(settings.activationDecision == .openPinch)
 
     trusted = false
     settings.refresh()

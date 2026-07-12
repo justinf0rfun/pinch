@@ -60,3 +60,14 @@ func duplicateShortcut() {
     #expect(!settings.save(.default) { _ in true })
     #expect(settings.error == .duplicate)
 }
+
+@MainActor
+@Test("Carbon registration reports a real conflict without dropping the working registration")
+func carbonRegistrationConflict() {
+    let shortcut = Shortcut(keyCode: UInt32(kVK_F18), modifiers: [.command, .control, .option])
+    let working = GlobalShortcutRegistration(shortcut) {}
+    #expect(working != nil)
+    let conflict = GlobalShortcutRegistration(shortcut) {}
+    #expect(conflict == nil)
+    working?.stop()
+}

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 import PinchCore
 import SwiftUI
 
@@ -32,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var panel = PinchPanel(session: session)
     private lazy var marker = MarkerPanel(session: session)
     private lazy var delivery = DeliveryPanel(session: session)
-    private var shortcut: GlobalShortcut?
+    private var shortcut: GlobalShortcutRegistration?
     private var markerTimer: Timer?
     private var markerDragMonitor: Any?
     private var markerStabilizer = MarkerFrameStabilizer()
@@ -52,9 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        shortcut = GlobalShortcut(settings.shortcut.active) { [weak self] in self?.openPinch() }
+        shortcut = GlobalShortcutRegistration(settings.shortcut.active) { [weak self] in self?.openPinch() }
         if shortcut == nil, settings.shortcut.active != .default {
-            shortcut = GlobalShortcut(.default) { [weak self] in self?.openPinch() }
+            shortcut = GlobalShortcutRegistration(.default) { [weak self] in self?.openPinch() }
             if shortcut != nil { settings.useFallbackShortcut(.default) }
         }
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -87,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openPinch() {
-        guard integration.hasAccessibilityPermission else {
+        settings.refreshPermission()
+        guard settings.canUsePinch else {
             showAccessibilityRecovery()
             return
         }
@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func replaceShortcut(with candidate: Shortcut) -> Bool {
-        guard let replacement = GlobalShortcut(candidate, action: { [weak self] in self?.openPinch() })
+        guard let replacement = GlobalShortcutRegistration(candidate, action: { [weak self] in self?.openPinch() })
         else { return false }
         shortcut?.stop()
         shortcut = replacement
@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showAccessibilityRecovery() {
         let alert = NSAlert()
         alert.messageText = "Accessibility Access Required"
-        alert.informativeText = "Pinch needs Accessibility access to insert phrases into the ChatGPT composer. It never reads chats, uses the clipboard, or sends messages."
+        alert.informativeText = AppSettings.accessibilityExplanation
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Cancel")
         NSApp.activate()
@@ -495,62 +495,4 @@ private func appKitFrame(for accessibilityFrame: CGRect) -> CGRect {
         width: accessibilityFrame.width,
         height: accessibilityFrame.height
     )
-}
-
-@MainActor
-private final class GlobalShortcut {
-    private var hotKey: EventHotKeyRef?
-    private var eventHandler: EventHandlerRef?
-    private let action: @MainActor () -> Void
-
-    init?(_ shortcut: Shortcut, action: @escaping @MainActor () -> Void) {
-        self.action = action
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
-        InstallEventHandler(
-            GetApplicationEventTarget(),
-            globalShortcutCallback,
-            1,
-            &eventType,
-            Unmanaged.passUnretained(self).toOpaque(),
-            &eventHandler
-        )
-        let identifier = EventHotKeyID(signature: 0x504E_4348, id: 1)
-        let status = RegisterEventHotKey(
-            shortcut.keyCode,
-            shortcut.carbonModifiers,
-            identifier,
-            GetApplicationEventTarget(),
-            0,
-            &hotKey
-        )
-        guard status == noErr else {
-            if let eventHandler { RemoveEventHandler(eventHandler) }
-            return nil
-        }
-    }
-
-    func stop() {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
-        if let eventHandler { RemoveEventHandler(eventHandler) }
-        hotKey = nil
-        eventHandler = nil
-    }
-
-    fileprivate func perform() {
-        action()
-    }
-}
-
-private func globalShortcutCallback(
-    nextHandler: EventHandlerCallRef?,
-    event: EventRef?,
-    userData: UnsafeMutableRawPointer?
-) -> OSStatus {
-    guard let userData else { return OSStatus(eventNotHandledErr) }
-    let shortcut = Unmanaged<GlobalShortcut>.fromOpaque(userData).takeUnretainedValue()
-    MainActor.assumeIsolated { shortcut.perform() }
-    return noErr
 }

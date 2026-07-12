@@ -7,7 +7,7 @@ import PinchCore
 final class AppSettings {
     var shortcut: ShortcutSettings
     var recorder: ShortcutRecorderState
-    var permissionStatus: AccessibilityStatus
+    var permissionStatus: AccessibilityStatus { permission.status }
     var activateShortcut: (Shortcut) -> Bool = { _ in false }
 
     private let shortcutStore = ShortcutStore()
@@ -19,7 +19,6 @@ final class AppSettings {
         recorder = ShortcutRecorderState(active: shortcut)
         let permission = PinchCore.AccessibilitySettings(isTrusted: AXIsProcessTrusted)
         self.permission = permission
-        permissionStatus = permission.status
     }
 
     func refreshPermission(returnedFromSettings: Bool = false) {
@@ -29,7 +28,6 @@ final class AppSettings {
         } else {
             permission.refresh()
         }
-        permissionStatus = permission.status
     }
 
     func requestAccessibilityPermission() {
@@ -62,4 +60,9 @@ final class AppSettings {
         shortcutStore.save(fallback)
         recorder = ShortcutRecorderState(active: fallback)
     }
+
+
+    var canUsePinch: Bool { permission.activationDecision == .openPinch }
+
+    static let accessibilityExplanation = "Pinch uses Accessibility only to identify and write to the ChatGPT composer. It does not read or store chats, use the clipboard, or send messages."
 }

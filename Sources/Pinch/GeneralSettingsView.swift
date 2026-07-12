@@ -19,6 +19,11 @@ struct GeneralSettingsView: View {
                         .disabled(settings.permissionStatus == .granted)
                     Button("Open System Settings", action: settings.openAccessibilitySettings)
                 }
+                if settings.recorder.isRecording {
+                    Text("Press the new shortcut, or press Escape to cancel.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Recording shortcut. Press the new shortcut, or Escape to cancel.")
+                }
             }
 
             Section("Keyboard Shortcut") {
@@ -58,7 +63,13 @@ struct GeneralSettingsView: View {
             Button("Continue", action: settings.requestAccessibilityPermission)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Pinch uses Accessibility only to identify and write to the ChatGPT composer. It does not read or store chats, use the clipboard, or send messages.")
+            Text(AppSettings.accessibilityExplanation)
+        }
+        .task {
+            while !Task.isCancelled {
+                settings.refreshPermission()
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
     }
 

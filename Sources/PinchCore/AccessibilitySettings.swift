@@ -30,4 +30,13 @@ public struct AccessibilitySettings {
         refresh()
         if status == .notGranted { status = .notGrantedAfterSettings }
     }
+
+    public var activationDecision: PinchActivationDecision {
+        status == .granted ? .openPinch : .showPermissionRecovery
+    }
+}
+
+public enum PinchActivationDecision: Equatable, Sendable {
+    case openPinch
+    case showPermissionRecovery
 }
