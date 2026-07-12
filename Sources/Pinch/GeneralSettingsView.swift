@@ -31,14 +31,15 @@ struct GeneralSettingsView: View {
             Section("Keyboard Shortcut") {
                 LabeledContent {
                     HStack {
+                        Button("Restore Default", action: settings.restoreDefault)
                         if settings.recorder.isRecording {
                             Button("Cancel", action: settings.cancelRecording)
+                        } else {
+                            Button(shortcutButtonLabel, action: settings.beginRecording)
+                                .monospaced()
+                                .accessibilityLabel("Record global shortcut")
+                                .accessibilityValue(shortcutButtonLabel)
                         }
-                        Button("Restore Default", action: settings.restoreDefault)
-                        Button(shortcutButtonLabel, action: settings.beginRecording)
-                            .monospaced()
-                            .accessibilityLabel("Record global shortcut")
-                            .accessibilityValue(shortcutButtonLabel)
                     }
                 } label: {
                     VStack(alignment: .leading) {
@@ -75,7 +76,6 @@ struct GeneralSettingsView: View {
     }
 
     private var shortcutButtonLabel: String {
-        if settings.recorder.isRecording { return "Type shortcut…" }
         return settings.recorder.draft?.displayName ?? settings.shortcut.active.displayName
     }
 
