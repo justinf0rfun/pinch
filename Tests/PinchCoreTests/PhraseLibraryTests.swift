@@ -88,6 +88,26 @@ struct PhraseLibraryTests {
         #expect(!library.phrases.contains { $0.displayName == "Changed" })
     }
 
+    @Test("resetting the library removes custom phrases and survives restart")
+    func resetLibrary() throws {
+        let fixture = try Fixture()
+        let library = try fixture.library(localeIdentifier: "en")
+        let custom = try library.create(displayName: "Custom", insertionText: "Remove me")
+        try library.update(
+            library.phrases[0].id,
+            displayName: "Changed",
+            insertionText: "Changed"
+        )
+
+        try library.reset(localeIdentifier: "zh-Hans")
+
+        let restarted = try fixture.library(localeIdentifier: "zh-Hans")
+        #expect(restarted.phrases.count == 6)
+        #expect(restarted.phrases.allSatisfy { $0.isBuiltIn })
+        #expect(!restarted.phrases.contains { $0.id == custom.id })
+        #expect(restarted.phrases.first?.displayName == "确认")
+    }
+
     @Test("Traditional Chinese locales do not receive Simplified Chinese defaults")
     func traditionalChineseFallback() throws {
         let fixture = try Fixture()

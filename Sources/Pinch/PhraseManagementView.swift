@@ -7,6 +7,7 @@ struct PhraseManagementView: View {
     @State private var editor: PhraseEditorDraft?
     @State private var errorMessage: String?
     @State private var isConfirmingRestore = false
+    @State private var isConfirmingReset = false
     @State private var dropTargetID: Phrase.ID?
     @State private var draggedPhraseID: Phrase.ID?
     @State private var previewPhrases: [Phrase] = []
@@ -26,14 +27,14 @@ struct PhraseManagementView: View {
 
                 Spacer()
 
-                Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: confirmRestore)
+                Button("Restore Built-ins", systemImage: "arrow.counterclockwise", action: confirmRestore)
                 .buttonStyle(.bordered)
                 .help("Restore built-in phrases")
                 .confirmationDialog(
                     "Restore Built-In Phrases?",
                     isPresented: $isConfirmingRestore
                 ) {
-                    Button("Restore Defaults", action: restoreDefaults)
+                    Button("Restore Built-ins", action: restoreDefaults)
                     Button("Cancel", role: .cancel) {}
                 } message: {
                     Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
@@ -89,9 +90,24 @@ struct PhraseManagementView: View {
             .background(.quaternary, in: .rect(cornerRadius: 14))
             .clipShape(.rect(cornerRadius: 14))
 
-            HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal")
-                Text("Drag phrases to reorder them. Shortcuts 1–9 follow this order.")
+            HStack(spacing: 12) {
+                Label(
+                    "Drag phrases to reorder them. Shortcuts 1–9 follow this order.",
+                    systemImage: "line.3.horizontal"
+                )
+                Spacer()
+                Button("Reset Library…", systemImage: "trash", role: .destructive, action: confirmReset)
+                    .buttonStyle(.borderless)
+                    .disabled(customPhraseCount == 0)
+                    .confirmationDialog(
+                        "Reset Phrase Library?",
+                        isPresented: $isConfirmingReset
+                    ) {
+                        Button("Reset Library", role: .destructive, action: resetLibrary)
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This deletes ^[\(customPhraseCount) custom phrase](inflect: true) and restores the built-in defaults. This cannot be undone.")
+                    }
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -122,6 +138,10 @@ struct PhraseManagementView: View {
         previewPhrases.isEmpty ? library.phrases : previewPhrases
     }
 
+    private var customPhraseCount: Int {
+        library.phrases.count(where: { !$0.isBuiltIn })
+    }
+
     private func add() {
         editor = PhraseEditorDraft()
     }
@@ -140,6 +160,15 @@ struct PhraseManagementView: View {
 
     private func confirmRestore() {
         isConfirmingRestore = true
+    }
+
+    private func confirmReset() {
+        isConfirmingReset = true
+    }
+
+    private func resetLibrary() {
+        cancelDrag()
+        perform { try library.reset() }
     }
 
     private func reorder(

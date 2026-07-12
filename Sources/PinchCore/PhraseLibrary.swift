@@ -108,6 +108,12 @@ public final class PhraseLibrary {
         }
     }
 
+    public func reset(localeIdentifier: String = Locale.current.identifier) throws {
+        try mutate {
+            phrases = Self.defaults(localeIdentifier: localeIdentifier)
+        }
+    }
+
     private func mutate(_ mutation: () -> Void) throws {
         let previous = phrases
         mutation()
