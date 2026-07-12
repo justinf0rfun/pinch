@@ -8,9 +8,10 @@ struct PhraseRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(shortcutNumber.map(String.init) ?? "–")
-                .font(.callout.monospacedDigit())
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(shortcutNumber == nil ? .tertiary : .secondary)
-                .frame(width: 24)
+                .frame(width: 24, height: 24)
+                .background(.quaternary, in: .rect(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(phrase.displayName)
@@ -29,6 +30,6 @@ struct PhraseRowView: View {
                 .accessibilityHidden(true)
         }
         .contentShape(.rect)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
     }
 }

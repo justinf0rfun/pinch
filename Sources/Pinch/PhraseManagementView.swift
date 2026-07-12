@@ -8,14 +8,36 @@ struct PhraseManagementView: View {
     @State private var isConfirmingRestore = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Phrase Library")
-                    .font(.title2)
-                    .bold()
-                Text("Choose the short replies that appear beside the ChatGPT composer. Drag to reorder; the first nine use number shortcuts.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Phrases")
+                        .font(.title2)
+                        .bold()
+                    Text("Manage the quick replies shown beside the ChatGPT composer.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Menu("More", systemImage: "ellipsis") {
+                    Button("Restore Defaults…", systemImage: "arrow.counterclockwise", action: confirmRestore)
+                }
+                .buttonStyle(.bordered)
+                .help("More phrase actions")
+                .confirmationDialog(
+                    "Restore Built-In Phrases?",
+                    isPresented: $isConfirmingRestore
+                ) {
+                    Button("Restore Defaults", action: restoreDefaults)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
+                }
+
+                Button("Add Phrase", systemImage: "plus", action: add)
+                    .buttonStyle(.borderedProminent)
+                    .help("Add a phrase")
             }
 
             List {
@@ -34,6 +56,7 @@ struct PhraseManagementView: View {
                             delete(phrase)
                         }
                     }
+                    .listRowBackground(Color.clear)
                 }
                 .onMove(perform: move)
                 .onDelete { offsets in
@@ -42,31 +65,19 @@ struct PhraseManagementView: View {
                     }
                 }
             }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
-            .clipShape(.rect(cornerRadius: 10))
-        }
-        .padding(20)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Add Phrase", systemImage: "plus", action: add)
-                    .help("Add a phrase")
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .background(.quaternary, in: .rect(cornerRadius: 14))
+            .clipShape(.rect(cornerRadius: 14))
+
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal")
+                Text("Drag phrases to reorder them. Shortcuts 1–9 follow this order.")
             }
-            ToolbarItem {
-                Menu("More", systemImage: "ellipsis.circle") {
-                    Button("Restore Defaults…", systemImage: "arrow.counterclockwise", action: confirmRestore)
-                }
-                .help("More phrase actions")
-                .confirmationDialog(
-                    "Restore Built-In Phrases?",
-                    isPresented: $isConfirmingRestore
-                ) {
-                    Button("Restore Defaults", action: restoreDefaults)
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
-                }
-            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
+        .padding(28)
         .sheet(item: $editor) { draft in
             NavigationStack {
                 PhraseEditorView(draft: draft, save: save)
