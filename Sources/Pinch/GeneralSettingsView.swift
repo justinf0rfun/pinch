@@ -8,24 +8,19 @@ struct GeneralSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("General")
-                .font(.title2)
-                .bold()
-                .padding(.bottom, 6)
-            Text("Permission and keyboard shortcut")
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 24)
+                .font(.title)
+                .padding(.bottom, 36)
+
+            Text("Permissions")
+                .font(.headline)
+                .padding(.bottom, 12)
 
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "accessibility")
-                        .font(.title3)
-                        .frame(width: 28)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Accessibility")
-                            .font(.headline)
                         Text(permissionDetail)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -37,20 +32,20 @@ struct GeneralSettingsView: View {
                     )
                 }
                 .padding(16)
+            }
+            .modifier(SettingsMaterial())
 
-                Divider()
-                    .padding(.horizontal, 16)
+            Text("Keyboard shortcut")
+                .font(.headline)
+                .padding(.top, 36)
+                .padding(.bottom, 12)
 
+            VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "command")
-                        .font(.title3)
-                        .frame(width: 28)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Global Shortcut")
-                            .font(.headline)
+                        Text("Open Pinch")
                         Text(shortcutDetail)
+                            .font(.callout)
                             .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
                     }
                     Spacer()
@@ -84,7 +79,11 @@ struct GeneralSettingsView: View {
 
             Spacer()
         }
-        .padding(28)
+        .frame(maxWidth: 700, alignment: .leading)
+        .padding(.horizontal, 48)
+        .padding(.top, 44)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(nsColor: .windowBackgroundColor))
         .alert("Allow Accessibility Access?", isPresented: $explainsPermission) {
             Button("Continue", action: settings.requestAccessibilityPermission)
             Button("Cancel", role: .cancel) {}

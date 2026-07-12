@@ -9,12 +9,11 @@ struct PhraseManagementView: View {
     @State private var isConfirmingReset = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Phrases")
-                        .font(.title2)
-                        .bold()
+                        .font(.title)
                     Text("Manage the quick replies shown beside the ChatGPT composer.")
                         .foregroundStyle(.secondary)
                 }
@@ -38,6 +37,7 @@ struct PhraseManagementView: View {
                     .buttonStyle(.borderedProminent)
                     .help("Add a phrase")
             }
+            .padding(.bottom, 28)
 
             List {
                 ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
@@ -72,8 +72,12 @@ struct PhraseManagementView: View {
             }
             .listStyle(.inset)
             .scrollContentBackground(.hidden)
-            .background(.quaternary, in: .rect(cornerRadius: 14))
-            .clipShape(.rect(cornerRadius: 14))
+            .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 13))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13)
+                    .stroke(.primary.opacity(0.09), lineWidth: 1)
+            }
+            .clipShape(.rect(cornerRadius: 13))
 
             HStack(spacing: 12) {
                 Label(
@@ -94,10 +98,15 @@ struct PhraseManagementView: View {
                         Text("This deletes ^[\(customPhraseCount) custom phrase](inflect: true) and restores the built-in defaults. This cannot be undone.")
                     }
             }
+            .padding(.top, 16)
             .font(.callout)
             .foregroundStyle(.secondary)
         }
-        .padding(28)
+        .frame(maxWidth: 760, alignment: .leading)
+        .padding(.horizontal, 48)
+        .padding(.top, 44)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: $editor) { draft in
             NavigationStack {
                 PhraseEditorView(draft: draft, save: save)
