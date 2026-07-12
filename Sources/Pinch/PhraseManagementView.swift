@@ -6,6 +6,7 @@ struct PhraseManagementView: View {
     @State private var editor: PhraseEditorDraft?
     @State private var errorMessage: String?
     @State private var isConfirmingRestore = false
+    @State private var dropTargetID: Phrase.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -42,12 +43,21 @@ struct PhraseManagementView: View {
 
             List {
                 ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
-                    Button {
-                        edit(phrase)
-                    } label: {
-                        PhraseRowView(phrase: phrase, shortcutNumber: index < 9 ? index + 1 : nil)
+                    PhraseRowView(
+                        phrase: phrase,
+                        shortcutNumber: index < 9 ? index + 1 : nil,
+                        isDropTarget: dropTargetID == phrase.id,
+                        edit: { edit(phrase) }
+                    )
+                    .dropDestination(for: String.self) { identifiers, location in
+                        reorder(
+                            identifiers.first,
+                            relativeTo: phrase,
+                            placeAfter: location.y > 28
+                        )
+                    } isTargeted: { isTargeted in
+                        dropTargetID = isTargeted ? phrase.id : nil
                     }
-                    .buttonStyle(.plain)
                     .contextMenu {
                         Button("Edit", systemImage: "pencil") {
                             edit(phrase)
@@ -56,13 +66,11 @@ struct PhraseManagementView: View {
                             delete(phrase)
                         }
                     }
-                    .draggable(phrase.id.uuidString)
-                    .dropDestination(for: String.self) { identifiers, location in
-                        reorder(
-                            identifiers.first,
-                            relativeTo: phrase,
-                            placeAfter: location.y > 28
-                        )
+                    .accessibilityAction(named: "Move Up") {
+                        moveUp(phrase, from: index)
+                    }
+                    .accessibilityAction(named: "Move Down") {
+                        moveDown(phrase, from: index)
                     }
                     .listRowBackground(Color.clear)
                 }
@@ -138,6 +146,24 @@ struct PhraseManagementView: View {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    private func moveUp(_ phrase: Phrase, from index: Int) {
+        guard index > 0 else { return }
+        _ = reorder(
+            phrase.id.uuidString,
+            relativeTo: library.phrases[index - 1],
+            placeAfter: false
+        )
+    }
+
+    private func moveDown(_ phrase: Phrase, from index: Int) {
+        guard index + 1 < library.phrases.count else { return }
+        _ = reorder(
+            phrase.id.uuidString,
+            relativeTo: library.phrases[index + 1],
+            placeAfter: true
+        )
     }
 
     private func perform(_ operation: () throws -> Void) {
