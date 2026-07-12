@@ -9,13 +9,15 @@ struct PinchApp: App {
 
     var body: some Scene {
         MenuBarExtra("Pinch", systemImage: "hand.pinch") {
-            Button("Open Pinch (⌥Space)") { appDelegate.openPinch() }
+            Button("Open Pinch (\(appDelegate.settings.shortcut.active.displayName))") {
+                appDelegate.openPinch()
+            }
             SettingsMenuButton()
             Divider()
             Button("Quit Pinch") { NSApp.terminate(nil) }
         }
         Settings {
-            SettingsRootView(library: appDelegate.phraseLibrary)
+            SettingsRootView(library: appDelegate.phraseLibrary, settings: appDelegate.settings)
         }
         .windowResizability(.contentSize)
     }
@@ -25,6 +27,7 @@ struct PinchApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let integration = MacOSPinchIntegration()
     let phraseLibrary: PhraseLibrary
+    let settings: AppSettings
     private lazy var session = PinchSession(integration: integration, phraseLibrary: phraseLibrary)
     private lazy var panel = PinchPanel(session: session)
     private lazy var marker = MarkerPanel(session: session)
@@ -40,13 +43,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             fatalError("Unable to load the local phrase library: \(error)")
         }
+        settings = AppSettings(shortcut: ShortcutStore().load())
         super.init()
+        settings.activateShortcut = { [weak self] shortcut in
+            self?.replaceShortcut(with: shortcut) ?? false
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        integration.requestAccessibilityPermission()
-        shortcut = GlobalShortcut { [weak self] in self?.openPinch() }
+        shortcut = GlobalShortcut(settings.shortcut.active) { [weak self] in self?.openPinch() }
+        if shortcut == nil, settings.shortcut.active != .default {
+            shortcut = GlobalShortcut(.default) { [weak self] in self?.openPinch() }
+            if shortcut != nil { settings.useFallbackShortcut(.default) }
+        }
         let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.updateMarker() }
         }
@@ -57,6 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] event in
             MainActor.assumeIsolated { self?.handleMarkerDrag(event.type) }
         }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        settings.refreshPermission()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -73,9 +87,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func openPinch() {
+        guard integration.hasAccessibilityPermission else {
+            showAccessibilityRecovery()
+            return
+        }
         session.open()
         guard session.phase == .open else { return }
         panel.show(near: session.attachmentFrame)
+    }
+
+    private func replaceShortcut(with candidate: Shortcut) -> Bool {
+        guard let replacement = GlobalShortcut(candidate, action: { [weak self] in self?.openPinch() })
+        else { return false }
+        shortcut?.stop()
+        shortcut = replacement
+        return true
+    }
+
+    private func showAccessibilityRecovery() {
+        let alert = NSAlert()
+        alert.messageText = "Accessibility Access Required"
+        alert.informativeText = "Pinch needs Accessibility access to insert phrases into the ChatGPT composer. It never reads chats, uses the clipboard, or sends messages."
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        if alert.runModal() == .alertFirstButtonReturn { settings.openAccessibilitySettings() }
     }
 
     private func updateMarker() {
@@ -467,7 +503,7 @@ private final class GlobalShortcut {
     private var eventHandler: EventHandlerRef?
     private let action: @MainActor () -> Void
 
-    init(action: @escaping @MainActor () -> Void) {
+    init?(_ shortcut: Shortcut, action: @escaping @MainActor () -> Void) {
         self.action = action
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -482,14 +518,18 @@ private final class GlobalShortcut {
             &eventHandler
         )
         let identifier = EventHotKeyID(signature: 0x504E_4348, id: 1)
-        RegisterEventHotKey(
-            UInt32(kVK_Space),
-            UInt32(optionKey),
+        let status = RegisterEventHotKey(
+            shortcut.keyCode,
+            shortcut.carbonModifiers,
             identifier,
             GetApplicationEventTarget(),
             0,
             &hotKey
         )
+        guard status == noErr else {
+            if let eventHandler { RemoveEventHandler(eventHandler) }
+            return nil
+        }
     }
 
     func stop() {

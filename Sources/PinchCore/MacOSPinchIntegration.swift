@@ -36,6 +36,8 @@ public final class MacOSPinchIntegration: PinchIntegration {
 
     public init() {}
 
+    public var hasAccessibilityPermission: Bool { AXIsProcessTrusted() }
+
     public func requestAccessibilityPermission() {
         AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
