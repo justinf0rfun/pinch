@@ -11,7 +11,7 @@ struct PhraseManagementView: View {
             List {
                 ForEach(library.phrases) { phrase in
                     Button {
-                        editor = PhraseEditorDraft(phrase: phrase)
+                        edit(phrase)
                     } label: {
                         LabeledContent {
                             Text(phrase.insertionText)
@@ -24,7 +24,7 @@ struct PhraseManagementView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button("Edit", systemImage: "pencil") {
-                            editor = PhraseEditorDraft(phrase: phrase)
+                            edit(phrase)
                         }
                         Button("Delete", systemImage: "trash", role: .destructive) {
                             delete(phrase)
@@ -39,9 +39,7 @@ struct PhraseManagementView: View {
             .navigationTitle("Phrases")
             .toolbar {
                 ToolbarItemGroup {
-                    Button("Add Phrase", systemImage: "plus") {
-                        editor = PhraseEditorDraft()
-                    }
+                    Button("Add Phrase", systemImage: "plus", action: add)
                     Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: restoreDefaults)
                 }
             }
@@ -65,6 +63,14 @@ struct PhraseManagementView: View {
         } else {
             try library.create(displayName: draft.displayName, insertionText: draft.insertionText)
         }
+    }
+
+    private func add() {
+        editor = PhraseEditorDraft()
+    }
+
+    private func edit(_ phrase: Phrase) {
+        editor = PhraseEditorDraft(phrase: phrase)
     }
 
     private func delete(_ phrase: Phrase) {

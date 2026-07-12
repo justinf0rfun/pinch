@@ -53,6 +53,14 @@ struct PhraseLibraryTests {
         #expect(!library.phrases.contains { $0.displayName == "Changed" })
     }
 
+    @Test("Traditional Chinese locales do not receive Simplified Chinese defaults")
+    func traditionalChineseFallback() throws {
+        let fixture = try Fixture()
+        let library = try fixture.library(localeIdentifier: "zh-Hant-TW")
+
+        #expect(library.phrases.first?.displayName == "Confirm")
+    }
+
     @Test("initial unversioned schema migrates with stable IDs and order")
     func initialSchemaMigration() throws {
         let fixture = try Fixture()

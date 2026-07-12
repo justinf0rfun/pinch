@@ -284,7 +284,7 @@ private struct QuickSelectionView: View {
                             PhraseLabel(
                                 phrase: phrase,
                                 shortcutNumber: session.phrases.firstIndex(of: phrase).map { $0 + 1 },
-                                highlighted: session.highlightedPhrase == phrase.insertionText
+                                highlighted: session.highlightedPhraseID == phrase.id
                             )
                         }
                         .buttonStyle(PinchPressStyle())
@@ -316,13 +316,13 @@ private struct QuickSelectionView: View {
     }
 
     private func isSelectedForDelivery(_ phrase: String) -> Bool {
-        session.phase == .pinching && session.selectedPhrase == phrase
+        session.phase == .pinching && session.selectedPhrase?.insertionText == phrase
     }
 
     private func deliveryOpacity(for phrase: String) -> Double {
         guard let selected = session.selectedPhrase else { return 1 }
-        if reduceMotion { return selected == phrase ? 0.45 : 0.2 }
-        return selected == phrase ? 1 : 0.25
+        if reduceMotion { return selected.insertionText == phrase ? 0.45 : 0.2 }
+        return selected.insertionText == phrase ? 1 : 0.25
     }
 }
 
@@ -337,7 +337,7 @@ private struct DeliveryView: View {
     var body: some View {
         GeometryReader { geometry in
             if let phrase = session.selectedPhrase {
-                Text(phrase)
+                Text(phrase.insertionText)
                     .lineLimit(1)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)

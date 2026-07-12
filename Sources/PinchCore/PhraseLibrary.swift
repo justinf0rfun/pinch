@@ -3,12 +3,6 @@ import Foundation
 @MainActor
 @Observable
 public final class PhraseLibrary {
-    public enum LibraryError: Error, Equatable {
-        case emptyDisplayName
-        case emptyInsertionText
-        case phraseNotFound
-    }
-
     public private(set) var phrases: [Phrase]
     private let fileURL: URL
 
@@ -41,8 +35,8 @@ public final class PhraseLibrary {
     @discardableResult
     public func create(displayName: String, insertionText: String) throws -> Phrase {
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw LibraryError.emptyDisplayName }
-        guard !insertionText.isEmpty else { throw LibraryError.emptyInsertionText }
+        guard !name.isEmpty else { throw PhraseLibraryError.emptyDisplayName }
+        guard !insertionText.isEmpty else { throw PhraseLibraryError.emptyInsertionText }
         let phrase = Phrase(displayName: name, insertionText: insertionText, order: phrases.count)
         try mutate { phrases.append(phrase) }
         return phrase
@@ -50,9 +44,9 @@ public final class PhraseLibrary {
 
     public func update(_ id: UUID, displayName: String, insertionText: String) throws {
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw LibraryError.emptyDisplayName }
-        guard !insertionText.isEmpty else { throw LibraryError.emptyInsertionText }
-        guard let index = phrases.firstIndex(where: { $0.id == id }) else { throw LibraryError.phraseNotFound }
+        guard !name.isEmpty else { throw PhraseLibraryError.emptyDisplayName }
+        guard !insertionText.isEmpty else { throw PhraseLibraryError.emptyInsertionText }
+        guard let index = phrases.firstIndex(where: { $0.id == id }) else { throw PhraseLibraryError.phraseNotFound }
         try mutate {
             phrases[index].displayName = name
             phrases[index].insertionText = insertionText
@@ -60,7 +54,7 @@ public final class PhraseLibrary {
     }
 
     public func delete(_ id: UUID) throws {
-        guard let index = phrases.firstIndex(where: { $0.id == id }) else { throw LibraryError.phraseNotFound }
+        guard let index = phrases.firstIndex(where: { $0.id == id }) else { throw PhraseLibraryError.phraseNotFound }
         try mutate {
             phrases.remove(at: index)
             normalizeOrder()
@@ -118,7 +112,10 @@ public final class PhraseLibrary {
     }
 
     private static func defaults(localeIdentifier: String) -> [Phrase] {
-        let simplifiedChinese = localeIdentifier.lowercased().hasPrefix("zh")
+        let identifier = localeIdentifier.lowercased().replacing("_", with: "-")
+        let simplifiedChinese = identifier.hasPrefix("zh-hans")
+            || identifier.hasPrefix("zh-cn")
+            || identifier.hasPrefix("zh-sg")
         let values = simplifiedChinese ? chineseDefaults : englishDefaults
         return values.enumerated().map { index, value in
             Phrase(
@@ -148,31 +145,4 @@ public final class PhraseLibrary {
         DefaultPhrase("00000000-0000-0000-0002-000000000005", "解释风险", "暂不执行，请先解释风险"),
         DefaultPhrase("00000000-0000-0000-0002-000000000006", "取消", "取消")
     ]
-}
-
-private struct PersistedLibrary: Codable {
-    let schemaVersion: Int
-    let phrases: [Phrase]
-}
-
-private struct LegacyLibrary: Decodable {
-    struct LegacyPhrase: Decodable {
-        let displayName: String
-        let insertionText: String
-    }
-
-    let phrases: [LegacyPhrase]
-}
-
-private struct DefaultPhrase {
-    let id: UUID
-    let displayName: String
-    let insertionText: String
-
-    init(_ id: String, _ displayName: String, _ insertionText: String) {
-        guard let id = UUID(uuidString: id) else { fatalError("Invalid built-in phrase ID") }
-        self.id = id
-        self.displayName = displayName
-        self.insertionText = insertionText
-    }
 }

@@ -199,8 +199,25 @@ func customPhraseSelection() async throws {
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
 
-    #expect(session.selectedPhrase == custom.insertionText)
+    #expect(session.selectedPhrase?.id == custom.id)
     #expect(integration.text == custom.insertionText)
+}
+
+@MainActor
+@Test("picker selection keeps distinct identities for matching insertion text")
+func duplicateInsertionTextIdentity() throws {
+    let fixtureURL = URL.temporaryDirectory.appending(path: UUID().uuidString).appending(path: "phrases.json")
+    let library = try PhraseLibrary(fileURL: fixtureURL, localeIdentifier: "en")
+    let first = try library.create(displayName: "First", insertionText: "Same text")
+    let second = try library.create(displayName: "Second", insertionText: "Same text")
+    try library.move(fromOffsets: IndexSet([6, 7]), toOffset: 0)
+    let integration = TestIntegration()
+    let session = PinchSession(integration: integration, phraseLibrary: library)
+
+    session.open()
+    #expect(session.highlightedPhraseID == first.id)
+    integration.press(.down)
+    #expect(session.highlightedPhraseID == second.id)
 }
 
 @MainActor
@@ -256,7 +273,7 @@ func keyboardNavigationAndCancellation() async {
     integration.press(.down)
     integration.press(.down)
     integration.press(.up)
-    #expect(session.highlightedPhrase == session.phrases[1].insertionText)
+    #expect(session.highlightedPhraseID == session.phrases[1].id)
     integration.press(.return)
     await Task.yield()
     await clock.advance()
@@ -421,7 +438,7 @@ func failedSelectionRefreshCancelsSession() async {
 
     #expect(session.phase == .idle)
     #expect(session.selectedPhrase == nil)
-    #expect(session.highlightedPhrase == nil)
+    #expect(session.highlightedPhraseID == nil)
     #expect(!target.isMonitoringKeyboard)
 }
 

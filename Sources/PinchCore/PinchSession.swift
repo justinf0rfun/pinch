@@ -56,8 +56,8 @@ public final class PinchSession {
     public var phrases: [Phrase] { phraseLibrary.phrases }
 
     public private(set) var phase = Phase.idle
-    public private(set) var selectedPhrase: String?
-    public private(set) var highlightedPhrase: String?
+    public private(set) var selectedPhrase: Phrase?
+    public private(set) var highlightedPhraseID: Phrase.ID?
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
     public var markerFrame: CGRect? { markerTarget?.attachmentFrame }
     private let integration: PinchIntegration
@@ -127,7 +127,7 @@ public final class PinchSession {
         phase = .idle
     }
 
-    public func choose(_ phrase: String) {
+    public func choose(_ phrase: Phrase) {
         guard phase == .open, let target else { return }
         selectedPhrase = phrase
         phase = .pinching
@@ -139,13 +139,13 @@ public final class PinchSession {
             integration.stopKeyboardMonitor()
             integration.stopOutsideClickMonitor()
             do {
-                try integration.deliver(phrase, to: target)
+                try integration.deliver(phrase.insertionText, to: target)
                 phase = .delivered
                 await clock.sleep(for: .milliseconds(150))
                 guard !Task.isCancelled, phase == .delivered else { return }
                 phase = .idle
                 selectedPhrase = nil
-                highlightedPhrase = nil
+                highlightedPhraseID = nil
                 self.target = nil
                 deliveryTask = nil
             } catch {
@@ -161,10 +161,6 @@ public final class PinchSession {
         }
     }
 
-    public func choose(_ phrase: Phrase) {
-        choose(phrase.insertionText)
-    }
-
     public func cancel() {
         guard phase == .hovering || phase == .open || phase == .pinching || phase == .failed else { return }
         markerTask?.cancel()
@@ -175,7 +171,7 @@ public final class PinchSession {
         integration.stopOutsideClickMonitor()
         target = nil
         selectedPhrase = nil
-        highlightedPhrase = nil
+        highlightedPhraseID = nil
         phase = .idle
     }
 
@@ -194,18 +190,19 @@ public final class PinchSession {
         case .down:
             moveHighlight(by: 1)
         case .return:
-            if let highlightedPhrase { choose(highlightedPhrase) }
+            if let highlightedPhrase = phrases.first(where: { $0.id == highlightedPhraseID }) {
+                choose(highlightedPhrase)
+            }
         case .escape:
             cancel()
         }
     }
 
     private func moveHighlight(by offset: Int) {
-        let insertionTexts = phrases.map(\.insertionText)
-        guard !insertionTexts.isEmpty else { return }
-        let current = highlightedPhrase.flatMap(insertionTexts.firstIndex) ?? 0
-        let next = min(max(current + offset, 0), insertionTexts.count - 1)
-        highlightedPhrase = insertionTexts[next]
+        guard !phrases.isEmpty else { return }
+        let current = highlightedPhraseID.flatMap { id in phrases.firstIndex { $0.id == id } } ?? 0
+        let next = min(max(current + offset, 0), phrases.count - 1)
+        highlightedPhraseID = phrases[next].id
     }
 
     public func recover() {
@@ -244,7 +241,7 @@ public final class PinchSession {
 
     private func finishOpening() {
         markerTask = nil
-        highlightedPhrase = phrases.first?.insertionText
+        highlightedPhraseID = phrases.first?.id
         phase = .open
         integration.startKeyboardMonitor { [weak self] key in
             self?.handle(key)

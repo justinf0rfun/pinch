@@ -110,29 +110,28 @@ public final class MacOSPinchIntegration: PinchIntegration {
             preparedDelivery: preparedDelivery,
             inserting: phrase
         )
-        try Self.postUnicodeText(phrase, to: capturedContext.processIdentifier)
-        guard waitForExpectedText(expectedText, in: capturedContext.element) else {
+        guard AXUIElementSetAttributeValue(
+            capturedContext.element,
+            kAXValueAttribute as CFString,
+            expectedText as CFString
+        ) == .success else { throw IntegrationError.insertionRejected }
+        var originalRange = CFRange()
+        guard AXValueGetValue(preparedDelivery.selectedTextRange, .cfRange, &originalRange) else {
             throw IntegrationError.insertionRejected
         }
-    }
-
-    private nonisolated static func postUnicodeText(_ text: String, to processIdentifier: pid_t) throws {
-        guard let source = CGEventSource(stateID: .combinedSessionState),
-              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
-            throw IntegrationError.insertionRejected
-        }
-        let characters = Array(text.utf16)
-        characters.withUnsafeBufferPointer { buffer in
-            keyDown.keyboardSetUnicodeString(
-                stringLength: buffer.count,
-                unicodeString: buffer.baseAddress
-            )
-        }
-        keyDown.flags = []
-        keyUp.flags = []
-        keyDown.postToPid(processIdentifier)
-        keyUp.postToPid(processIdentifier)
+        var caretRange = CFRange(
+            location: originalRange.location + (phrase as NSString).length,
+            length: 0
+        )
+        guard waitForExpectedText(expectedText, in: capturedContext.element),
+              let caretValue = AXValueCreate(.cfRange, &caretRange),
+              AXUIElementSetAttributeValue(
+                capturedContext.element,
+                kAXSelectedTextRangeAttribute as CFString,
+                caretValue
+              ) == .success,
+              waitForSelectedTextRange(caretRange, in: capturedContext.element)
+        else { throw IntegrationError.insertionRejected }
     }
 
     private func expectedChatGPTDraft(
@@ -235,6 +234,21 @@ public final class MacOSPinchIntegration: PinchIntegration {
                 kAXSelectedTextMarkerRangeAttribute as CFString,
                 &value
             ) == .success && value.map { CFEqual($0, expected) } == true
+        }
+    }
+
+    private func waitForSelectedTextRange(_ expected: CFRange, in element: AXUIElement) -> Bool {
+        wait(upTo: 0.15) {
+            var value: CFTypeRef?
+            var actual = CFRange()
+            return AXUIElementCopyAttributeValue(
+                element,
+                kAXSelectedTextRangeAttribute as CFString,
+                &value
+            ) == .success
+                && (value as! AXValue?).map { AXValueGetValue($0, .cfRange, &actual) } == true
+                && actual.location == expected.location
+                && actual.length == expected.length
         }
     }
 

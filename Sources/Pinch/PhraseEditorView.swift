@@ -2,9 +2,14 @@ import SwiftUI
 
 struct PhraseEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @State var draft: PhraseEditorDraft
+    @State private var draft: PhraseEditorDraft
     let save: (PhraseEditorDraft) throws -> Void
     @State private var errorMessage: String?
+
+    init(draft: PhraseEditorDraft, save: @escaping (PhraseEditorDraft) throws -> Void) {
+        _draft = State(initialValue: draft)
+        self.save = save
+    }
 
     var body: some View {
         Form {
