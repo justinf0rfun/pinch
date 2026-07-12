@@ -19,11 +19,6 @@ struct GeneralSettingsView: View {
                         .disabled(settings.permissionStatus == .granted)
                     Button("Open System Settings", action: settings.openAccessibilitySettings)
                 }
-                if settings.recorder.isRecording {
-                    Text("Press the new shortcut, or press Escape to cancel.")
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Recording shortcut. Press the new shortcut, or Escape to cancel.")
-                }
             }
 
             Section("Keyboard Shortcut") {
@@ -43,6 +38,11 @@ struct GeneralSettingsView: View {
                 }
                 if let draft = settings.recorder.draft {
                     LabeledContent("New Shortcut", value: draft.displayName)
+                }
+                if settings.recorder.isRecording {
+                    Text("Press the new shortcut, or press Escape to cancel.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Recording shortcut. Press the new shortcut, or Escape to cancel.")
                 }
                 if let message = shortcutMessage {
                     Label(message, systemImage: "exclamationmark.triangle")
