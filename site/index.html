@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Pinch puts your most useful phrases one gesture away in ChatGPT and Codex for Mac."
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Pinch — The shortest path to the right words</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111'/%3E%3Cpath d='M20 42l10-10M34 28l10-10' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav shell" aria-label="Main navigation">
+        <a class="wordmark" href="#top" aria-label="Pinch home">
+          <span class="mark" aria-hidden="true"><i></i><i></i></span>
+          Pinch
+        </a>
+
+        <div class="nav-links">
+          <a href="#how-it-works">How it works</a>
+          <a href="#details">Details</a>
+        </div>
+
+        <a class="button button-dark button-small" href="https://github.com/justinf0rfun/pinch">
+          View on GitHub
+        </a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow">A faster way through ChatGPT on Mac</p>
+          <h1>Don’t type.<br />Just choose.</h1>
+          <p class="hero-description">
+            Turn the replies you repeat into one deliberate gesture. Pick an answer, keep your
+            cursor, stay in control.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-dark" href="https://github.com/justinf0rfun/pinch">Get Pinch</a>
+            <a class="button button-light" href="#how-it-works">See how it works</a>
+          </div>
+        </div>
+
+        <div class="stage" aria-label="Pinch opening beside ChatGPT, choosing a phrase, and placing it in the draft without sending">
+          <div class="ambient ambient-one"></div>
+          <div class="ambient ambient-two"></div>
+
+          <div class="chat-window">
+            <div class="mac-bar">
+              <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+              <span>Pinch evaluation</span>
+              <div class="toolbar-chips" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+            <div class="codex-layout">
+              <aside class="codex-sidebar" aria-hidden="true">
+                <strong>Codex</strong>
+                <div class="sidebar-nav">
+                  <span>New task</span><span>Scheduled</span><span>Plugins</span><span>Sites</span>
+                  <span>Pull requests</span><span>Chat</span>
+                </div>
+                <small>Projects</small>
+                <b>pinch</b>
+                <div class="project-list">
+                  <span>ChatGPT quick replies</span>
+                  <span class="current">Evaluate native app</span>
+                  <span>Add AI reply phrases</span>
+                </div>
+              </aside>
+
+              <section class="conversation">
+                <div class="thread-title">Evaluate native app <span>•••</span></div>
+                <div class="thread-content">
+                  <div class="user-message">The interaction should feel native to the app.</div>
+                  <div class="worked">Worked for 2m 48s</div>
+                  <div class="assistant-copy">
+                    <strong>Updated</strong>
+                    <span>Pinch now follows the composer wherever it moves.</span>
+                    <span>The selected reply returns to your draft without sending.</span>
+                  </div>
+                </div>
+                <div class="composer">
+                  <span class="composer-placeholder">Ask for follow-up changes</span>
+                  <span class="delivered-phrase">Use the recommended option</span>
+                  <span class="caret" aria-hidden="true"></span>
+                  <div class="composer-meta"><span>＋ &nbsp; Settings</span><span>Fast</span></div>
+                  <div class="composer-tools" aria-hidden="true">
+                    <span>⌁</span>
+                    <span class="send">↑</span>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="environment" aria-hidden="true">
+                <div class="environment-head"><span>Environment</span><b>＋</b></div>
+                <div class="environment-row"><span>Changes</span><em>+185 −23</em></div>
+                <div class="environment-row"><span>Local</span><b>⌄</b></div>
+                <div class="environment-row"><span>main</span><b>⌄</b></div>
+                <div class="environment-row"><span>Commit or push</span></div>
+                <hr />
+                <small>Browser</small>
+                <div class="browser-row"><i></i><span>Pinch — Website</span></div>
+                <hr />
+                <small>Sources</small>
+                <div class="source-line"></div><div class="source-line short"></div>
+              </aside>
+            </div>
+          </div>
+
+          <div class="pinch-picker">
+            <div class="picker-row"><kbd>1</kbd><span>Confirm and continue</span></div>
+            <div class="picker-row"><kbd>2</kbd><span>Allow this action</span></div>
+            <div class="picker-row active"><kbd>3</kbd><span>Use the recommended option</span></div>
+            <div class="picker-row"><kbd>4</kbd><span>Proceed with your best judgment</span></div>
+            <div class="picker-row"><kbd>5</kbd><span>Explain the risks first</span></div>
+            <div class="picker-row"><kbd>6</kbd><span>Cancel</span></div>
+          </div>
+
+          <div class="pinch-dot" aria-hidden="true"><span></span></div>
+          <div class="demo-sequence" aria-hidden="true">
+            <span><kbd>⌥</kbd><kbd>Space</kbd> Open</span>
+            <span><kbd>3</kbd> Choose</span>
+            <span>Draft updated · Not sent</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="principles shell" aria-label="Pinch design principles">
+        <div class="principle-intro">
+          <p>Most prompts are unique.<br />Most replies are not.</p>
+          <h2>Pinch removes the typing that adds no thought.</h2>
+        </div>
+        <dl class="principle-stats">
+          <div><dt>01</dt><dd><strong>One shortcut</strong><span>Available wherever your cursor is.</span></dd></div>
+          <div><dt>06</dt><dd><strong>Useful replies</strong><span>Decisions, not a prompt library.</span></dd></div>
+          <div><dt>00</dt><dd><strong>Automatic sends</strong><span>Your draft remains yours.</span></dd></div>
+        </dl>
+      </section>
+
+      <section class="steps shell" id="how-it-works">
+        <h2>A reply in three beats.</h2>
+        <div class="step-list">
+          <article>
+            <span class="step-number">01</span>
+            <h3>Open</h3>
+            <p>Press Option–Space or dwell on the marker beside the composer.</p>
+          </article>
+          <article>
+            <span class="step-number">02</span>
+            <h3>Choose</h3>
+            <p>Use a number, arrow keys, or click one of six focused replies.</p>
+          </article>
+          <article>
+            <span class="step-number">03</span>
+            <h3>Continue</h3>
+            <p>Pinch restores your cursor and updates the draft. It never presses Send.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="focus shell" id="details">
+        <div class="focus-visual">
+          <div class="shortcut-card">
+            <span>Open Pinch</span>
+            <div><kbd>⌥</kbd><kbd>Space</kbd></div>
+          </div>
+          <div class="gesture" aria-hidden="true">
+            <span class="finger finger-top"></span>
+            <i>Use the recommended option</i>
+            <span class="finger finger-bottom"></span>
+          </div>
+        </div>
+        <div class="focus-copy">
+          <h2>It stays out of your conversation.</h2>
+          <p>
+            Pinch works through macOS Accessibility. It never needs your OpenAI password, never
+            reads your chat history, and never submits a message for you.
+          </p>
+          <ul>
+            <li><span></span>Built natively for macOS</li>
+            <li><span></span>Works with ChatGPT and Codex</li>
+            <li><span></span>Your draft stays in the official app</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="closing shell">
+        <div>
+          <h2>Keep the conversation moving.</h2>
+          <p>Small utility. Zero new workflow.</p>
+        </div>
+        <a class="button button-dark" href="https://github.com/justinf0rfun/pinch">Get Pinch</a>
+      </section>
+    </main>
+
+    <footer class="footer shell">
+      <a class="wordmark" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i></span>Pinch</a>
+      <p>Made for Mac. Not affiliated with OpenAI.</p>
+      <a href="https://github.com/justinf0rfun/pinch">GitHub ↗</a>
+    </footer>
+  </body>
+</html>

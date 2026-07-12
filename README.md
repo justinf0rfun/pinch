@@ -3,6 +3,12 @@
 Pinch is a macOS 26 menu bar app for placing a built-in phrase into a text
 composer without submitting it.
 
+The static English product site lives in `site/`. Preview it with:
+
+```sh
+python3 -m http.server 8000 --directory site
+```
+
 Build the production app and run all tests with one command:
 
 ```sh
