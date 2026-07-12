@@ -34,10 +34,7 @@ struct GeneralSettingsView: View {
                         if settings.recorder.isRecording {
                             Button("Cancel", action: settings.cancelRecording)
                         }
-                        Menu("Shortcut options", systemImage: "ellipsis") {
-                            Button("Restore Option–Space", action: settings.restoreDefault)
-                        }
-                        .labelStyle(.iconOnly)
+                        Button("Restore Default", action: settings.restoreDefault)
                         Button(shortcutButtonLabel, action: settings.beginRecording)
                             .monospaced()
                             .accessibilityLabel("Record global shortcut")
@@ -54,14 +51,15 @@ struct GeneralSettingsView: View {
                             .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
                     }
                 }
-
-                ShortcutRecorderView(
-                    isRecording: settings.recorder.isRecording,
-                    record: settings.record,
-                    cancel: settings.cancelRecording
-                )
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
+                .background {
+                    ShortcutRecorderView(
+                        isRecording: settings.recorder.isRecording,
+                        record: settings.record,
+                        cancel: settings.cancelRecording
+                    )
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
+                }
             }
         }
         .formStyle(.grouped)
