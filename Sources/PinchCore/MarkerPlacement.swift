@@ -1,5 +1,19 @@
 import Foundation
 
+public enum AccessibilityCoordinateSpace {
+    public static func appKitFrame(
+        for accessibilityFrame: CGRect,
+        primaryScreenFrame: CGRect
+    ) -> CGRect {
+        CGRect(
+            x: accessibilityFrame.minX,
+            y: primaryScreenFrame.maxY - accessibilityFrame.maxY,
+            width: accessibilityFrame.width,
+            height: accessibilityFrame.height
+        )
+    }
+}
+
 public enum MarkerPlacement {
     public static func origin(for composerFrame: CGRect, markerSize: CGSize) -> CGPoint {
         CGPoint(

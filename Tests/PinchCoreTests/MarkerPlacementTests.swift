@@ -9,6 +9,28 @@ func markerPlacement() {
     #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 459, y: 244))
 }
 
+@Test("Accessibility frames convert across displays around the primary screen")
+func accessibilityFrameConversion() {
+    let primary = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+
+    #expect(AccessibilityCoordinateSpace.appKitFrame(
+        for: CGRect(x: 100, y: 200, width: 400, height: 96),
+        primaryScreenFrame: primary
+    ) == CGRect(x: 100, y: 604, width: 400, height: 96))
+    #expect(AccessibilityCoordinateSpace.appKitFrame(
+        for: CGRect(x: -1_200, y: 100, width: 400, height: 96),
+        primaryScreenFrame: primary
+    ) == CGRect(x: -1_200, y: 704, width: 400, height: 96))
+    #expect(AccessibilityCoordinateSpace.appKitFrame(
+        for: CGRect(x: 200, y: -700, width: 400, height: 96),
+        primaryScreenFrame: primary
+    ) == CGRect(x: 200, y: 1_504, width: 400, height: 96))
+    #expect(AccessibilityCoordinateSpace.appKitFrame(
+        for: CGRect(x: 200, y: 1_000, width: 400, height: 96),
+        primaryScreenFrame: primary
+    ) == CGRect(x: 200, y: -196, width: 400, height: 96))
+}
+
 @Test("ChatGPT picker shares the composer's bottom edge and grows upward")
 func composerPickerPlacement() {
     let visible = CGRect(x: 0, y: 0, width: 1200, height: 900)

@@ -53,9 +53,14 @@ public final class PinchSession {
         case idle, hovering, open, pinching, delivered, failed
     }
 
+    public enum Failure: Equatable {
+        case targetUnavailable
+    }
+
     public var phrases: [Phrase] { phraseLibrary.phrases }
 
     public private(set) var phase = Phase.idle
+    public private(set) var failure: Failure?
     public private(set) var selectedPhrase: Phrase?
     public private(set) var highlightedPhraseID: Phrase.ID?
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
@@ -141,6 +146,7 @@ public final class PinchSession {
             do {
                 try integration.deliver(phrase.insertionText, to: target)
                 phase = .delivered
+                failure = nil
                 await clock.sleep(for: .milliseconds(150))
                 guard !Task.isCancelled, phase == .delivered else { return }
                 phase = .idle
@@ -150,6 +156,7 @@ public final class PinchSession {
                 deliveryTask = nil
             } catch {
                 phase = .failed
+                failure = .targetUnavailable
                 deliveryTask = nil
                 integration.startKeyboardMonitor { [weak self] key in
                     self?.handle(key)
@@ -163,6 +170,14 @@ public final class PinchSession {
 
     public func cancel() {
         guard phase == .hovering || phase == .open || phase == .pinching || phase == .failed else { return }
+        reset(clearMarker: false)
+    }
+
+    public func targetApplicationDidTerminate() {
+        reset(clearMarker: true)
+    }
+
+    private func reset(clearMarker: Bool) {
         markerTask?.cancel()
         markerTask = nil
         deliveryTask?.cancel()
@@ -172,6 +187,8 @@ public final class PinchSession {
         target = nil
         selectedPhrase = nil
         highlightedPhraseID = nil
+        failure = nil
+        if clearMarker { markerTarget = nil }
         phase = .idle
     }
 
@@ -213,6 +230,7 @@ public final class PinchSession {
         }
         do {
             try integration.prepareDelivery(to: target)
+            failure = nil
             phase = .open
         } catch {
             cancel()

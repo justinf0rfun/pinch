@@ -51,6 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(targetApplicationDidTerminate(_:)),
+            name: NSWorkspace.didTerminateApplicationNotification,
+            object: nil
+        )
         shortcut = GlobalShortcutRegistration(settings.shortcut.active) { [weak self] in self?.openPinch() }
         if shortcut == nil, settings.shortcut.active != .default {
             shortcut = GlobalShortcutRegistration(.default) { [weak self] in self?.openPinch() }
@@ -73,6 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        NSWorkspace.shared.notificationCenter.removeObserver(
+            self,
+            name: NSWorkspace.didTerminateApplicationNotification,
+            object: nil
+        )
         session.cancel()
         panel.close()
         marker.close()
@@ -83,6 +94,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         markerDragMonitor = nil
         shortcut?.stop()
         shortcut = nil
+    }
+
+    @objc private func targetApplicationDidTerminate(_ notification: Notification) {
+        guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                as? NSRunningApplication,
+              application.bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
+        else { return }
+        session.targetApplicationDidTerminate()
+        panel.close()
+        marker.close()
+        delivery.close()
     }
 
     func openPinch() {
@@ -173,7 +195,8 @@ private final class MarkerPanel {
     func show(near targetFrame: CGRect) {
         let target = appKitFrame(for: targetFrame)
         panel.setFrameOrigin(MarkerPlacement.origin(for: target, markerSize: Self.size))
-        guard !panel.isVisible else { return }
+        guard !panel.isVisible || !panel.occlusionState.contains(.visible) else { return }
+        panel.orderOut(nil)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
@@ -334,10 +357,18 @@ private struct QuickSelectionView: View {
             .scrollIndicators(.hidden)
 
             if session.phase == .failed {
-                Button("重试", systemImage: "arrow.uturn.backward") { session.recover() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .padding(.bottom, 8)
+                VStack(spacing: 8) {
+                    Text("The original ChatGPT composer is unavailable.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Button("Dismiss", action: session.cancel)
+                        Button("Try Again", systemImage: "arrow.uturn.backward", action: session.recover)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.orange)
+                    }
+                }
+                .padding(.bottom, 8)
             }
         }
         .padding(8)
@@ -478,7 +509,7 @@ private struct DeliveryMaterial: ViewModifier {
 @MainActor
 private func configureFloatingPanel(_ panel: NSPanel) {
     panel.level = .floating
-    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    panel.collectionBehavior = [.canJoinAllApplications, .fullScreenAuxiliary, .transient]
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
     panel.isOpaque = false
@@ -488,11 +519,10 @@ private func configureFloatingPanel(_ panel: NSPanel) {
 
 @MainActor
 private func appKitFrame(for accessibilityFrame: CGRect) -> CGRect {
-    guard let primaryHeight = NSScreen.screens.first?.frame.maxY else { return accessibilityFrame }
-    return CGRect(
-        x: accessibilityFrame.minX,
-        y: primaryHeight - accessibilityFrame.maxY,
-        width: accessibilityFrame.width,
-        height: accessibilityFrame.height
+    guard let primaryScreen = NSScreen.screens.first(where: { $0.frame.origin == .zero })
+        ?? NSScreen.screens.first else { return accessibilityFrame }
+    return AccessibilityCoordinateSpace.appKitFrame(
+        for: accessibilityFrame,
+        primaryScreenFrame: primaryScreen.frame
     )
 }

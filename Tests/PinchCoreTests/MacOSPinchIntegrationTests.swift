@@ -110,7 +110,7 @@ func shortcutTargetSupport() {
 
 @MainActor
 @Test(
-    "ChatGPT ProseMirror replaces the captured selection after picker focus",
+    "ChatGPT restart restores its Accessibility tree before direct insertion",
     .enabled(if: ProcessInfo.processInfo.environment["PINCH_RUN_CHATGPT_AX_SMOKE"] == "1")
 )
 func chatGPTAccessibilityInsertionSmokeTest() throws {
@@ -121,6 +121,9 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
 
     chatGPT.activate()
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+
+    let integration = MacOSPinchIntegration()
+    _ = try integration.captureTarget()
     guard let composer = focusedChatGPTComposer(application: chatGPT) else {
         throw MacOSPinchIntegration.IntegrationError.noEditableTarget
     }
@@ -166,7 +169,6 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
         expectedSelection: "SELECTED"
     )
 
-    let integration = MacOSPinchIntegration()
     let target = try integration.captureTarget()
     try integration.prepareDelivery(to: target)
 

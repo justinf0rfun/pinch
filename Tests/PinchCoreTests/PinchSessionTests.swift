@@ -114,6 +114,40 @@ func appSwitchRestoresMarkerAndShortcut() {
 }
 
 @MainActor
+@Test("restarting ChatGPT clears the old session before capturing the new composer")
+func targetApplicationRestart() {
+    let integration = TestIntegration()
+    let oldFrame = CGRect(x: 10, y: 20, width: 300, height: 96)
+    integration.currentTarget = PinchTarget(
+        identifier: "old-chatgpt-process",
+        editableFrame: oldFrame,
+        attachmentFrame: oldFrame
+    )
+    let session = PinchSession(integration: integration)
+
+    session.refreshMarker()
+    session.beginMarkerHover()
+    #expect(session.phase == .hovering)
+
+    session.targetApplicationDidTerminate()
+
+    #expect(session.phase == .idle)
+    #expect(session.markerFrame == nil)
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
+
+    let newFrame = CGRect(x: 500, y: 120, width: 420, height: 110)
+    integration.currentTarget = PinchTarget(
+        identifier: "new-chatgpt-process",
+        editableFrame: newFrame,
+        attachmentFrame: newFrame
+    )
+    session.refreshMarker()
+
+    #expect(session.markerFrame == newFrame)
+}
+
+@MainActor
 @Test("clicking outside an open picker dismisses the session")
 func outsideClickDismissesOpenPicker() {
     let integration = TestIntegration()
@@ -304,6 +338,7 @@ func targetDisappears() async {
     await Task.yield()
 
     #expect(session.phase == .failed)
+    #expect(session.failure == .targetUnavailable)
     #expect(integration.text.isEmpty)
     #expect(integration.isMonitoringKeyboard)
 }
@@ -360,6 +395,7 @@ func failedDeliveryMonitorCleanup() async {
 
     session.cancel()
 
+    #expect(session.failure == nil)
     #expect(!integration.isMonitoringKeyboard)
     #expect(!integration.isMonitoringOutsideClicks)
 }
