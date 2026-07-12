@@ -6,47 +6,67 @@ struct GeneralSettingsView: View {
     @State private var explainsPermission = false
 
     var body: some View {
-        Form {
-            Section("Accessibility") {
-                LabeledContent("Status") {
-                    Label(permissionLabel, systemImage: permissionIcon)
-                        .foregroundStyle(settings.permissionStatus == .granted ? .green : .secondary)
-                }
-                Text(permissionDetail)
-                    .foregroundStyle(.secondary)
-                HStack {
-                    Button("Grant Accessibility Access") { explainsPermission = true }
-                        .disabled(settings.permissionStatus == .granted)
-                    Button("Open System Settings", action: settings.openAccessibilitySettings)
-                }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            Text("General")
+                .font(.title2)
+                .bold()
+                .padding(.bottom, 6)
+            Text("Permission and keyboard shortcut")
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 24)
 
-            Section("Keyboard Shortcut") {
-                LabeledContent("Active Shortcut", value: settings.shortcut.active.displayName)
-                HStack {
-                    Button(
-                        settings.recorder.isRecording ? "Press a shortcut…" : "Record Shortcut",
-                        action: settings.beginRecording
-                    )
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "accessibility")
+                    .font(.title3)
+                    .frame(width: 28)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Accessibility")
+                        .font(.headline)
+                    Text(permissionDetail)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Label(permissionLabel, systemImage: permissionIcon)
+                    .foregroundStyle(settings.permissionStatus == .granted ? .green : .secondary)
+                Button(
+                    settings.permissionStatus == .granted ? "Open Settings" : "Grant Access",
+                    action: permissionAction
+                )
+            }
+            .padding(.vertical, 16)
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "command")
+                    .font(.title3)
+                    .frame(width: 28)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Global Shortcut")
+                        .font(.headline)
+                    Text(shortcutDetail)
+                        .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
+                }
+                Spacer()
+                if settings.recorder.isRecording {
                     Button("Cancel", action: settings.cancelRecording)
-                        .disabled(!settings.recorder.isRecording)
+                }
+                Menu("Shortcut options", systemImage: "ellipsis") {
                     Button("Restore Option–Space", action: settings.restoreDefault)
-                    Spacer()
+                }
+                .labelStyle(.iconOnly)
+                Button(shortcutButtonLabel, action: settings.beginRecording)
+                    .buttonStyle(.bordered)
+                    .monospaced()
+                    .accessibilityLabel("Record global shortcut")
+                    .accessibilityValue(shortcutButtonLabel)
+                if canSave {
                     Button("Save", action: settings.saveShortcut)
                         .buttonStyle(.borderedProminent)
-                        .disabled(!canSave)
-                }
-                if let draft = settings.recorder.draft {
-                    LabeledContent("New Shortcut", value: draft.displayName)
-                }
-                if settings.recorder.isRecording {
-                    Text("Press the new shortcut, or press Escape to cancel.")
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Recording shortcut. Press the new shortcut, or Escape to cancel.")
-                }
-                if let message = shortcutMessage {
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
                 }
                 ShortcutRecorderView(
                     isRecording: settings.recorder.isRecording,
@@ -56,9 +76,11 @@ struct GeneralSettingsView: View {
                 .frame(width: 1, height: 1)
                 .accessibilityHidden(true)
             }
+            .padding(.vertical, 16)
+
+            Spacer()
         }
-        .formStyle(.grouped)
-        .navigationTitle("General")
+        .padding(28)
         .alert("Allow Accessibility Access?", isPresented: $explainsPermission) {
             Button("Continue", action: settings.requestAccessibilityPermission)
             Button("Cancel", role: .cancel) {}
@@ -80,6 +102,16 @@ struct GeneralSettingsView: View {
             && draft.validation == .valid
     }
 
+    private var shortcutButtonLabel: String {
+        if settings.recorder.isRecording { return "Type shortcut…" }
+        return settings.recorder.draft?.displayName ?? settings.shortcut.active.displayName
+    }
+
+    private var shortcutDetail: String {
+        if settings.recorder.isRecording { return "Press a new combination, or Escape to cancel." }
+        return shortcutMessage ?? "Opens Pinch from anywhere."
+    }
+
     private var permissionLabel: String {
         settings.permissionStatus == .granted ? "Granted" : "Not Granted"
     }
@@ -90,10 +122,10 @@ struct GeneralSettingsView: View {
 
     private var permissionDetail: String {
         switch settings.permissionStatus {
-        case .granted: "Pinch can insert phrases into the ChatGPT composer."
+        case .granted: "Ready to insert phrases into ChatGPT."
         case .revoked: "Access was removed. Grant it again to use Pinch."
-        case .notGrantedAfterSettings: "Access is still off. Enable Pinch in System Settings."
-        case .notGranted: "Required only when you use Pinch with ChatGPT."
+        case .notGrantedAfterSettings: "Enable Pinch in System Settings to continue."
+        case .notGranted: "Required to insert phrases into the ChatGPT composer."
         }
     }
 
@@ -104,9 +136,16 @@ struct GeneralSettingsView: View {
         switch settings.shortcut.error {
         case .duplicate: return "That shortcut is already active."
         case .reserved: return "That shortcut is reserved."
-        case .registrationConflict:
-            return "That shortcut is unavailable. The previous shortcut remains active."
+        case .registrationConflict: return "Unavailable. The previous shortcut is still active."
         case nil: return nil
+        }
+    }
+
+    private func permissionAction() {
+        if settings.permissionStatus == .granted {
+            settings.openAccessibilitySettings()
+        } else {
+            explainsPermission = true
         }
     }
 }
