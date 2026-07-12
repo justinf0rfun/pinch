@@ -6,16 +6,11 @@ struct SettingsRootView: View {
     @State private var selection = SettingsSection.phrases
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Label("Phrases", systemImage: "text.badge.plus")
-                    .tag(SettingsSection.phrases)
+        TabView(selection: $selection) {
+            Tab("Phrases", systemImage: "text.bubble", value: SettingsSection.phrases) {
+                PhraseManagementView(library: library)
             }
-            .navigationTitle("Settings")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-        } detail: {
-            PhraseManagementView(library: library)
         }
-        .frame(minWidth: 760, minHeight: 500)
+        .frame(width: 680, height: 500)
     }
 }

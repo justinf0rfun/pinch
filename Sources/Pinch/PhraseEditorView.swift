@@ -13,12 +13,16 @@ struct PhraseEditorView: View {
 
     var body: some View {
         Form {
-            TextField("Display name", text: $draft.displayName)
-            TextField("Insertion text", text: $draft.insertionText, axis: .vertical)
-                .lineLimit(3...8)
+            Section {
+                TextField("Name", text: $draft.displayName)
+                TextField("Reply", text: $draft.insertionText, axis: .vertical)
+                    .lineLimit(3...6)
+            } footer: {
+                Text("The name stays compact in the picker. The full reply is inserted into ChatGPT.")
+            }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 420, minHeight: 240)
+        .frame(width: 460, height: 280)
         .navigationTitle(draft.id == nil ? "New Phrase" : "Edit Phrase")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

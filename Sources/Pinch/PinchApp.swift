@@ -17,6 +17,7 @@ struct PinchApp: App {
         Settings {
             SettingsRootView(library: appDelegate.phraseLibrary)
         }
+        .windowResizability(.contentSize)
     }
 }
 

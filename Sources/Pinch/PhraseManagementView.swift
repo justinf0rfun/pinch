@@ -5,41 +5,66 @@ struct PhraseManagementView: View {
     @Bindable var library: PhraseLibrary
     @State private var editor: PhraseEditorDraft?
     @State private var errorMessage: String?
+    @State private var isConfirmingRestore = false
 
     var body: some View {
-        List {
-            ForEach(library.phrases) { phrase in
-                Button {
-                    edit(phrase)
-                } label: {
-                    LabeledContent {
-                        Text(phrase.insertionText)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Phrase Library")
+                    .font(.title2)
+                    .bold()
+                Text("Choose the short replies that appear beside the ChatGPT composer. Drag to reorder; the first nine use number shortcuts.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            List {
+                ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
+                    Button {
+                        edit(phrase)
                     } label: {
-                        Text(phrase.displayName)
+                        PhraseRowView(phrase: phrase, shortcutNumber: index < 9 ? index + 1 : nil)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Edit", systemImage: "pencil") {
+                            edit(phrase)
+                        }
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            delete(phrase)
+                        }
                     }
                 }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button("Edit", systemImage: "pencil") {
-                        edit(phrase)
-                    }
-                    Button("Delete", systemImage: "trash", role: .destructive) {
+                .onMove(perform: move)
+                .onDelete { offsets in
+                    for phrase in offsets.map({ library.phrases[$0] }) {
                         delete(phrase)
                     }
                 }
             }
-            .onMove(perform: move)
-            .onDelete { offsets in
-                for phrase in offsets.map({ library.phrases[$0] }) { delete(phrase) }
-            }
+            .listStyle(.inset(alternatesRowBackgrounds: true))
+            .clipShape(.rect(cornerRadius: 10))
         }
-        .navigationTitle("Phrases")
+        .padding(20)
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItem(placement: .primaryAction) {
                 Button("Add Phrase", systemImage: "plus", action: add)
-                Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: restoreDefaults)
+                    .help("Add a phrase")
+            }
+            ToolbarItem {
+                Menu("More", systemImage: "ellipsis.circle") {
+                    Button("Restore Defaults…", systemImage: "arrow.counterclockwise", action: confirmRestore)
+                }
+                .help("More phrase actions")
+                .confirmationDialog(
+                    "Restore Built-In Phrases?",
+                    isPresented: $isConfirmingRestore
+                ) {
+                    Button("Restore Defaults", action: restoreDefaults)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
+                }
             }
         }
         .sheet(item: $editor) { draft in
@@ -80,6 +105,10 @@ struct PhraseManagementView: View {
 
     private func restoreDefaults() {
         perform { try library.restoreDefaults() }
+    }
+
+    private func confirmRestore() {
+        isConfirmingRestore = true
     }
 
     private func perform(_ operation: () throws -> Void) {
