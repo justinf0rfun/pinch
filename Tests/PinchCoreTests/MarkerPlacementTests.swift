@@ -2,11 +2,11 @@ import Foundation
 import Testing
 @testable import PinchCore
 
-@Test("marker sits inside the composer's upper-right content area")
+@Test("marker aligns with the composer's send control")
 func markerPlacement() {
     let composer = CGRect(x: 100, y: 200, width: 400, height: 96)
 
-    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 448, y: 244))
+    #expect(MarkerPlacement.origin(for: composer, markerSize: CGSize(width: 36, height: 36)) == CGPoint(x: 459, y: 244))
 }
 
 @Test("shortcut picker aligns with the caret and stays above the input")
