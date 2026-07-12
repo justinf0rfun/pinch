@@ -10,14 +10,12 @@ struct PinchApp: App {
     var body: some Scene {
         MenuBarExtra("Pinch", systemImage: "hand.pinch") {
             Button("Open Pinch (⌥Space)") { appDelegate.openPinch() }
-            SettingsLink {
-                Label("Manage Phrases", systemImage: "text.badge.plus")
-            }
+            SettingsMenuButton()
             Divider()
             Button("Quit Pinch") { NSApp.terminate(nil) }
         }
         Settings {
-            PhraseManagementView(library: appDelegate.phraseLibrary)
+            SettingsRootView(library: appDelegate.phraseLibrary)
         }
     }
 }

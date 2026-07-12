@@ -7,44 +7,41 @@ struct PhraseManagementView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(library.phrases) { phrase in
-                    Button {
-                        edit(phrase)
+        List {
+            ForEach(library.phrases) { phrase in
+                Button {
+                    edit(phrase)
+                } label: {
+                    LabeledContent {
+                        Text(phrase.insertionText)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     } label: {
-                        LabeledContent {
-                            Text(phrase.insertionText)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        } label: {
-                            Text(phrase.displayName)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Edit", systemImage: "pencil") {
-                            edit(phrase)
-                        }
-                        Button("Delete", systemImage: "trash", role: .destructive) {
-                            delete(phrase)
-                        }
+                        Text(phrase.displayName)
                     }
                 }
-                .onMove(perform: move)
-                .onDelete { offsets in
-                    for phrase in offsets.map({ library.phrases[$0] }) { delete(phrase) }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Edit", systemImage: "pencil") {
+                        edit(phrase)
+                    }
+                    Button("Delete", systemImage: "trash", role: .destructive) {
+                        delete(phrase)
+                    }
                 }
             }
-            .navigationTitle("Phrases")
-            .toolbar {
-                ToolbarItemGroup {
-                    Button("Add Phrase", systemImage: "plus", action: add)
-                    Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: restoreDefaults)
-                }
+            .onMove(perform: move)
+            .onDelete { offsets in
+                for phrase in offsets.map({ library.phrases[$0] }) { delete(phrase) }
             }
         }
-        .frame(minWidth: 620, minHeight: 440)
+        .navigationTitle("Phrases")
+        .toolbar {
+            ToolbarItemGroup {
+                Button("Add Phrase", systemImage: "plus", action: add)
+                Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: restoreDefaults)
+            }
+        }
         .sheet(item: $editor) { draft in
             NavigationStack {
                 PhraseEditorView(draft: draft, save: save)
