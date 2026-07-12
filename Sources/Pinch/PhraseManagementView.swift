@@ -6,42 +6,10 @@ struct PhraseManagementView: View {
     @State private var editor: PhraseEditorDraft?
     @State private var errorMessage: String?
     @State private var isConfirmingRestore = false
-    @State private var isConfirmingReset = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Phrases")
-                        .font(.title2)
-                    Text("Manage the quick replies shown beside the ChatGPT composer.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button("Restore Built-ins", systemImage: "arrow.counterclockwise", action: confirmRestore)
-                .buttonStyle(.bordered)
-                .help("Restore built-in phrases")
-                .confirmationDialog(
-                    "Restore Built-In Phrases?",
-                    isPresented: $isConfirmingRestore
-                ) {
-                    Button("Restore Built-ins", action: restoreDefaults)
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
-                }
-
-                Button("Add Phrase", systemImage: "plus", action: add)
-                    .buttonStyle(.borderedProminent)
-                    .help("Add a phrase")
-            }
-            .controlSize(.small)
-            .padding(.bottom, 28)
-
-            List {
+        Form {
+            Section("Phrase Library") {
                 ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
                     PhraseRowView(
                         phrase: phrase,
@@ -63,7 +31,6 @@ struct PhraseManagementView: View {
                     .accessibilityAction(named: "Move Down") {
                         moveDown(phrase, from: index)
                     }
-                    .listRowBackground(Color.clear)
                 }
                 .onMove(perform: move)
                 .onDelete { offsets in
@@ -72,43 +39,27 @@ struct PhraseManagementView: View {
                     }
                 }
             }
-            .listStyle(.inset)
-            .scrollContentBackground(.hidden)
-            .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 13))
-            .overlay {
-                RoundedRectangle(cornerRadius: 13)
-                    .stroke(.primary.opacity(0.09), lineWidth: 1)
-            }
-            .clipShape(.rect(cornerRadius: 13))
-
-            HStack(spacing: 12) {
-                Label(
-                    "Drag phrases to reorder them. Shortcuts 1–9 follow this order.",
-                    systemImage: "line.3.horizontal"
-                )
-                Spacer()
-                Button("Reset Library…", systemImage: "trash", role: .destructive, action: confirmReset)
-                    .buttonStyle(.borderless)
-                    .disabled(customPhraseCount == 0)
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Phrases")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("Restore Built-ins", systemImage: "arrow.counterclockwise", action: confirmRestore)
+                    .help("Restore built-in phrases")
                     .confirmationDialog(
-                        "Reset Phrase Library?",
-                        isPresented: $isConfirmingReset
+                        "Restore Built-In Phrases?",
+                        isPresented: $isConfirmingRestore
                     ) {
-                        Button("Reset Library", role: .destructive, action: resetLibrary)
+                        Button("Restore Built-ins", action: restoreDefaults)
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("This deletes ^[\(customPhraseCount) custom phrase](inflect: true) and restores the built-in defaults. This cannot be undone.")
+                        Text("Built-in phrases will return to their original text and order. Your custom phrases will not change.")
                     }
+
+                Button("Add Phrase", systemImage: "plus", action: add)
+                    .help("Add a phrase")
             }
-            .padding(.top, 16)
-            .font(.callout)
-            .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: 660, alignment: .leading)
-        .padding(.horizontal, 40)
-        .padding(.top, 46)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: $editor) { draft in
             NavigationStack {
                 PhraseEditorView(draft: draft, save: save)
@@ -129,10 +80,6 @@ struct PhraseManagementView: View {
         }
     }
 
-    private var customPhraseCount: Int {
-        library.phrases.count(where: { !$0.isBuiltIn })
-    }
-
     private func add() {
         editor = PhraseEditorDraft()
     }
@@ -151,14 +98,6 @@ struct PhraseManagementView: View {
 
     private func confirmRestore() {
         isConfirmingRestore = true
-    }
-
-    private func confirmReset() {
-        isConfirmingReset = true
-    }
-
-    private func resetLibrary() {
-        perform { try library.reset() }
     }
 
     private func move(fromOffsets: IndexSet, toOffset: Int) {
