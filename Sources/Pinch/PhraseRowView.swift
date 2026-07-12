@@ -4,9 +4,7 @@ import SwiftUI
 struct PhraseRowView: View {
     let phrase: Phrase
     let shortcutNumber: Int?
-    let isDropTarget: Bool
     let edit: () -> Void
-    let startDragging: () -> NSItemProvider
 
     var body: some View {
         HStack(spacing: 12) {
@@ -39,15 +37,8 @@ struct PhraseRowView: View {
                 .frame(width: 32, height: 32)
                 .contentShape(.rect)
                 .accessibilityHidden(true)
-                .onDrag(startDragging) {
-                    PhraseDragPreviewView(phrase: phrase)
-                }
         }
         .contentShape(.rect)
         .padding(.vertical, 8)
-        .background(
-            isDropTarget ? Color.accentColor.opacity(0.12) : Color.clear,
-            in: .rect(cornerRadius: 8)
-        )
     }
 }

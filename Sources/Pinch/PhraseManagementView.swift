@@ -1,6 +1,5 @@
 import PinchCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct PhraseManagementView: View {
     @Bindable var library: PhraseLibrary
@@ -8,11 +7,6 @@ struct PhraseManagementView: View {
     @State private var errorMessage: String?
     @State private var isConfirmingRestore = false
     @State private var isConfirmingReset = false
-    @State private var dropTargetID: Phrase.ID?
-    @State private var draggedPhraseID: Phrase.ID?
-    @State private var previewPhrases: [Phrase] = []
-    @State private var dragCleanupTask: Task<Void, Never>?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -46,23 +40,13 @@ struct PhraseManagementView: View {
             }
 
             List {
-                ForEach(displayedPhrases.enumerated(), id: \.element.id) { index, phrase in
+                ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
                     PhraseRowView(
                         phrase: phrase,
                         shortcutNumber: index < 9 ? index + 1 : nil,
-                        isDropTarget: dropTargetID == phrase.id,
-                        edit: { edit(phrase) },
-                        startDragging: { beginDragging(phrase) }
+                        edit: { edit(phrase) }
                     )
-                    .onDrop(
-                        of: [UTType.text],
-                        delegate: PhraseDropDelegate(
-                            targetID: phrase.id,
-                            entered: previewMove,
-                            exited: scheduleDragCleanup,
-                            dropped: commitDrag
-                        )
-                    )
+                    .moveDisabled(false)
                     .contextMenu {
                         Button("Edit", systemImage: "pencil") {
                             edit(phrase)
@@ -79,6 +63,7 @@ struct PhraseManagementView: View {
                     }
                     .listRowBackground(Color.clear)
                 }
+                .onMove(perform: move)
                 .onDelete { offsets in
                     for phrase in offsets.map({ library.phrases[$0] }) {
                         delete(phrase)
@@ -123,7 +108,6 @@ struct PhraseManagementView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onDisappear(perform: cancelDrag)
     }
 
     private func save(_ draft: PhraseEditorDraft) throws {
@@ -132,10 +116,6 @@ struct PhraseManagementView: View {
         } else {
             try library.create(displayName: draft.displayName, insertionText: draft.insertionText)
         }
-    }
-
-    private var displayedPhrases: [Phrase] {
-        previewPhrases.isEmpty ? library.phrases : previewPhrases
     }
 
     private var customPhraseCount: Int {
@@ -167,8 +147,11 @@ struct PhraseManagementView: View {
     }
 
     private func resetLibrary() {
-        cancelDrag()
         perform { try library.reset() }
+    }
+
+    private func move(fromOffsets: IndexSet, toOffset: Int) {
+        perform { try library.move(fromOffsets: fromOffsets, toOffset: toOffset) }
     }
 
     private func reorder(
@@ -184,66 +167,6 @@ struct PhraseManagementView: View {
             errorMessage = error.localizedDescription
             return false
         }
-    }
-
-    private func beginDragging(_ phrase: Phrase) -> NSItemProvider {
-        dragCleanupTask?.cancel()
-        draggedPhraseID = phrase.id
-        previewPhrases = library.phrases
-        return NSItemProvider(object: phrase.id.uuidString as NSString)
-    }
-
-    private func previewMove(to targetID: Phrase.ID) {
-        dragCleanupTask?.cancel()
-        dropTargetID = targetID
-        guard let draggedPhraseID,
-              let sourceIndex = previewPhrases.firstIndex(where: { $0.id == draggedPhraseID }),
-              let targetIndex = previewPhrases.firstIndex(where: { $0.id == targetID }),
-              sourceIndex != targetIndex else { return }
-        let destination = targetIndex + (sourceIndex < targetIndex ? 1 : 0)
-        let update = {
-            previewPhrases.move(
-                fromOffsets: IndexSet(integer: sourceIndex),
-                toOffset: destination
-            )
-        }
-        if reduceMotion {
-            update()
-        } else {
-            withAnimation(.snappy(duration: 0.18), update)
-        }
-    }
-
-    private func scheduleDragCleanup(leaving targetID: Phrase.ID) {
-        if dropTargetID == targetID { dropTargetID = nil }
-        dragCleanupTask?.cancel()
-        dragCleanupTask = Task {
-            try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled, dropTargetID == nil else { return }
-            cancelDrag()
-        }
-    }
-
-    private func commitDrag() -> Bool {
-        dragCleanupTask?.cancel()
-        guard !previewPhrases.isEmpty else { return false }
-        do {
-            try library.reorder(to: previewPhrases.map(\.id))
-            cancelDrag()
-            return true
-        } catch {
-            errorMessage = error.localizedDescription
-            cancelDrag()
-            return false
-        }
-    }
-
-    private func cancelDrag() {
-        dragCleanupTask?.cancel()
-        draggedPhraseID = nil
-        dropTargetID = nil
-        previewPhrases = []
-        dragCleanupTask = nil
     }
 
     private func moveUp(_ phrase: Phrase, from index: Int) {
