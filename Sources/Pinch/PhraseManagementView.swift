@@ -13,8 +13,9 @@ struct PhraseManagementView: View {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Phrases")
-                        .font(.title)
+                        .font(.title2)
                     Text("Manage the quick replies shown beside the ChatGPT composer.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
 
@@ -37,6 +38,7 @@ struct PhraseManagementView: View {
                     .buttonStyle(.borderedProminent)
                     .help("Add a phrase")
             }
+            .controlSize(.small)
             .padding(.bottom, 28)
 
             List {
@@ -102,9 +104,9 @@ struct PhraseManagementView: View {
             .font(.callout)
             .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: 760, alignment: .leading)
-        .padding(.horizontal, 48)
-        .padding(.top, 44)
+        .frame(maxWidth: 660, alignment: .leading)
+        .padding(.horizontal, 40)
+        .padding(.top, 46)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(item: $editor) { draft in

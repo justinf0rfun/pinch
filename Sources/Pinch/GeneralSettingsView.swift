@@ -8,19 +8,21 @@ struct GeneralSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("General")
-                .font(.title)
-                .padding(.bottom, 36)
+                .font(.title2)
+                .padding(.bottom, 28)
 
-            Text("Permissions")
-                .font(.headline)
-                .padding(.bottom, 12)
+            Text("Pinch")
+                .font(.callout)
+                .bold()
+                .padding(.bottom, 10)
 
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Accessibility")
-                        Text(permissionDetail)
                             .font(.callout)
+                        Text(permissionDetail)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -31,21 +33,19 @@ struct GeneralSettingsView: View {
                         action: permissionAction
                     )
                 }
-                .padding(16)
-            }
-            .modifier(SettingsMaterial())
+                .controlSize(.small)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
 
-            Text("Keyboard shortcut")
-                .font(.headline)
-                .padding(.top, 36)
-                .padding(.bottom, 12)
+                Divider()
+                    .padding(.horizontal, 14)
 
-            VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Open Pinch")
-                        Text(shortcutDetail)
                             .font(.callout)
+                        Text(shortcutDetail)
+                            .font(.caption)
                             .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
                     }
                     Spacer()
@@ -73,15 +73,17 @@ struct GeneralSettingsView: View {
                     .frame(width: 1, height: 1)
                     .accessibilityHidden(true)
                 }
-                .padding(16)
+                .controlSize(.small)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
             .modifier(SettingsMaterial())
 
             Spacer()
         }
-        .frame(maxWidth: 700, alignment: .leading)
-        .padding(.horizontal, 48)
-        .padding(.top, 44)
+        .frame(maxWidth: 620, alignment: .leading)
+        .padding(.horizontal, 40)
+        .padding(.top, 46)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(nsColor: .windowBackgroundColor))
         .alert("Allow Accessibility Access?", isPresented: $explainsPermission) {

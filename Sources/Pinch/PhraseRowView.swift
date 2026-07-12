@@ -18,10 +18,10 @@ struct PhraseRowView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(phrase.displayName)
-                            .font(.body)
+                            .font(.callout)
                             .lineLimit(1)
                         Text(phrase.insertionText)
-                            .font(.callout)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }

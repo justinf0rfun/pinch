@@ -18,7 +18,8 @@ struct PinchApp: App {
         Window("Pinch Settings", id: "settings") {
             SettingsRootView(library: appDelegate.phraseLibrary, settings: appDelegate.settings)
         }
-        .defaultSize(width: 780, height: 500)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 720, height: 460)
     }
 }
 
