@@ -71,14 +71,19 @@ struct PhraseLibraryTests {
         let fixture = try Fixture()
         let library = try fixture.library(localeIdentifier: "en")
         let custom = try library.create(displayName: "不要翻译", insertionText: "保留我的原文")
+        try library.move(
+            fromOffsets: IndexSet(integer: library.phrases.count - 1),
+            toOffset: 1
+        )
         let firstBuiltIn = try #require(library.phrases.first)
         try library.update(firstBuiltIn.id, displayName: "Changed", insertionText: "Changed")
-        try library.delete(library.phrases[1].id)
 
         try library.restoreDefaults(localeIdentifier: "zh-Hans")
 
-        #expect(library.phrases.contains(custom))
-        #expect(library.phrases.first { $0.id == custom.id }?.displayName == "不要翻译")
+        let restarted = try fixture.library(localeIdentifier: "zh-Hans")
+        #expect(restarted.phrases[1].id == custom.id)
+        #expect(restarted.phrases[1].displayName == "不要翻译")
+        #expect(restarted.phrases[1].insertionText == "保留我的原文")
         #expect(library.phrases.contains { $0.displayName == "确认" && $0.insertionText == "确认，继续" })
         #expect(!library.phrases.contains { $0.displayName == "Changed" })
     }

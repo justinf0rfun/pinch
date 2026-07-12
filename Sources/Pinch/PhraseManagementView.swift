@@ -26,11 +26,9 @@ struct PhraseManagementView: View {
 
                 Spacer()
 
-                Menu("More", systemImage: "ellipsis") {
-                    Button("Restore Defaults…", systemImage: "arrow.counterclockwise", action: confirmRestore)
-                }
+                Button("Restore Defaults", systemImage: "arrow.counterclockwise", action: confirmRestore)
                 .buttonStyle(.bordered)
-                .help("More phrase actions")
+                .help("Restore built-in phrases")
                 .confirmationDialog(
                     "Restore Built-In Phrases?",
                     isPresented: $isConfirmingRestore

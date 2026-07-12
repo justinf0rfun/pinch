@@ -95,8 +95,15 @@ public final class PhraseLibrary {
 
     public func restoreDefaults(localeIdentifier: String = Locale.current.identifier) throws {
         try mutate {
-            let custom = phrases.filter { !$0.isBuiltIn }
-            phrases = Self.defaults(localeIdentifier: localeIdentifier) + custom
+            let defaults = Self.defaults(localeIdentifier: localeIdentifier)
+            var defaultIndex = 0
+            phrases = phrases.compactMap { phrase in
+                guard phrase.isBuiltIn else { return phrase }
+                guard defaults.indices.contains(defaultIndex) else { return nil }
+                defer { defaultIndex += 1 }
+                return defaults[defaultIndex]
+            }
+            phrases.append(contentsOf: defaults.dropFirst(defaultIndex))
             normalizeOrder()
         }
     }
