@@ -53,6 +53,7 @@ struct SettingsRootView: View {
             PhraseManagementView(library: library)
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
         .frame(width: 920, height: 620)
     }
 }

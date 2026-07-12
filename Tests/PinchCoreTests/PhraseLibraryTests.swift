@@ -36,6 +36,23 @@ struct PhraseLibraryTests {
         #expect(restarted.phrases.map(\.order) == Array(restarted.phrases.indices))
     }
 
+    @Test("drag-style relative moves persist before and after the target")
+    func relativeMove() throws {
+        let fixture = try Fixture()
+        let library = try fixture.library(localeIdentifier: "en")
+        let first = library.phrases[0]
+        let second = library.phrases[1]
+        let third = library.phrases[2]
+
+        try library.move(first.id, relativeTo: third.id, placeAfter: true)
+        #expect(Array(library.phrases.map(\.id).prefix(3)) == [second.id, third.id, first.id])
+
+        try library.move(first.id, relativeTo: library.phrases[0].id, placeAfter: false)
+        let restarted = try fixture.library(localeIdentifier: "en")
+        #expect(restarted.phrases.first?.id == first.id)
+        #expect(restarted.phrases.map(\.order) == Array(restarted.phrases.indices))
+    }
+
     @Test("restoring current-language defaults does not rewrite custom content")
     func restoreDefaults() throws {
         let fixture = try Fixture()

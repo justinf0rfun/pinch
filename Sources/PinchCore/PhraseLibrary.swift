@@ -71,6 +71,17 @@ public final class PhraseLibrary {
         }
     }
 
+    public func move(_ id: Phrase.ID, relativeTo targetID: Phrase.ID, placeAfter: Bool) throws {
+        guard id != targetID else { return }
+        guard let sourceIndex = phrases.firstIndex(where: { $0.id == id }),
+              let targetIndex = phrases.firstIndex(where: { $0.id == targetID })
+        else { throw PhraseLibraryError.phraseNotFound }
+        try move(
+            fromOffsets: IndexSet(integer: sourceIndex),
+            toOffset: targetIndex + (placeAfter ? 1 : 0)
+        )
+    }
+
     public func restoreDefaults(localeIdentifier: String = Locale.current.identifier) throws {
         try mutate {
             let custom = phrases.filter { !$0.isBuiltIn }

@@ -56,9 +56,16 @@ struct PhraseManagementView: View {
                             delete(phrase)
                         }
                     }
+                    .draggable(phrase.id.uuidString)
+                    .dropDestination(for: String.self) { identifiers, location in
+                        reorder(
+                            identifiers.first,
+                            relativeTo: phrase,
+                            placeAfter: location.y > 28
+                        )
+                    }
                     .listRowBackground(Color.clear)
                 }
-                .onMove(perform: move)
                 .onDelete { offsets in
                     for phrase in offsets.map({ library.phrases[$0] }) {
                         delete(phrase)
@@ -110,16 +117,27 @@ struct PhraseManagementView: View {
         perform { try library.delete(phrase.id) }
     }
 
-    private func move(fromOffsets: IndexSet, toOffset: Int) {
-        perform { try library.move(fromOffsets: fromOffsets, toOffset: toOffset) }
-    }
-
     private func restoreDefaults() {
         perform { try library.restoreDefaults() }
     }
 
     private func confirmRestore() {
         isConfirmingRestore = true
+    }
+
+    private func reorder(
+        _ identifier: String?,
+        relativeTo target: Phrase,
+        placeAfter: Bool
+    ) -> Bool {
+        guard let identifier, let id = UUID(uuidString: identifier) else { return false }
+        do {
+            try library.move(id, relativeTo: target.id, placeAfter: placeAfter)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     private func perform(_ operation: () throws -> Void) {
