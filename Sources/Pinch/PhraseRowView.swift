@@ -6,6 +6,7 @@ struct PhraseRowView: View {
     let shortcutNumber: Int?
     let isDropTarget: Bool
     let edit: () -> Void
+    let startDragging: () -> NSItemProvider
 
     var body: some View {
         HStack(spacing: 12) {
@@ -38,7 +39,9 @@ struct PhraseRowView: View {
                 .frame(width: 32, height: 32)
                 .contentShape(.rect)
                 .accessibilityHidden(true)
-                .draggable(phrase.id.uuidString)
+                .onDrag(startDragging) {
+                    PhraseDragPreviewView(phrase: phrase)
+                }
         }
         .contentShape(.rect)
         .padding(.vertical, 8)

@@ -53,6 +53,19 @@ struct PhraseLibraryTests {
         #expect(restarted.phrases.map(\.order) == Array(restarted.phrases.indices))
     }
 
+    @Test("a completed drag commits the preview order once")
+    func commitDragOrder() throws {
+        let fixture = try Fixture()
+        let library = try fixture.library(localeIdentifier: "en")
+        let reversedIDs = library.phrases.map(\.id).reversed()
+
+        try library.reorder(to: Array(reversedIDs))
+
+        let restarted = try fixture.library(localeIdentifier: "en")
+        #expect(restarted.phrases.map(\.id) == Array(reversedIDs))
+        #expect(restarted.phrases.map(\.order) == Array(restarted.phrases.indices))
+    }
+
     @Test("restoring current-language defaults does not rewrite custom content")
     func restoreDefaults() throws {
         let fixture = try Fixture()

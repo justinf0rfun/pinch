@@ -82,6 +82,17 @@ public final class PhraseLibrary {
         )
     }
 
+    public func reorder(to orderedIDs: [Phrase.ID]) throws {
+        guard orderedIDs.count == phrases.count,
+              Set(orderedIDs) == Set(phrases.map(\.id))
+        else { throw PhraseLibraryError.invalidOrder }
+        let phrasesByID = Dictionary(uniqueKeysWithValues: phrases.map { ($0.id, $0) })
+        try mutate {
+            phrases = orderedIDs.compactMap { phrasesByID[$0] }
+            normalizeOrder()
+        }
+    }
+
     public func restoreDefaults(localeIdentifier: String = Locale.current.identifier) throws {
         try mutate {
             let custom = phrases.filter { !$0.isBuiltIn }
