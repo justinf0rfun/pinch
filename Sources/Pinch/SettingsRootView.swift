@@ -8,17 +8,50 @@ struct SettingsRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                Label("General", systemImage: "gearshape")
-                    .tag(SettingsSection.general)
-                Label("Phrases", systemImage: "text.bubble")
-                    .tag(SettingsSection.phrases)
+            VStack(spacing: 4) {
+                Button {
+                    selection = .general
+                } label: {
+                    Label("General", systemImage: "gearshape")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(
+                    selection == .general ? Color.primary.opacity(0.08) : Color.clear,
+                    in: .rect(cornerRadius: 9)
+                )
+                .accessibilityAddTraits(selection == .general ? .isSelected : [])
+
+                Button {
+                    selection = .phrases
+                } label: {
+                    Label("Phrases", systemImage: "text.bubble")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(
+                    selection == .phrases ? Color.primary.opacity(0.08) : Color.clear,
+                    in: .rect(cornerRadius: 9)
+                )
+                .accessibilityAddTraits(selection == .phrases ? .isSelected : [])
+
+                Spacer()
             }
             .font(.callout)
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 10)
             .padding(.top, 42)
-            .background(Color(nsColor: .underPageBackgroundColor))
+            .background {
+                ZStack {
+                    Color(nsColor: .windowBackgroundColor)
+                    Rectangle().fill(.thinMaterial)
+                }
+            }
             .navigationSplitViewColumnWidth(min: 176, ideal: 184, max: 200)
         } detail: {
             switch selection {
