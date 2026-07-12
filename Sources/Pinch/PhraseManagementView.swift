@@ -8,7 +8,7 @@ struct PhraseManagementView: View {
     @State private var isConfirmingRestore = false
 
     var body: some View {
-        Form {
+        List {
             Section("Phrase Library") {
                 ForEach(library.phrases.enumerated(), id: \.element.id) { index, phrase in
                     PhraseRowView(
@@ -40,7 +40,7 @@ struct PhraseManagementView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .listStyle(.inset)
         .navigationTitle("Phrases")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
