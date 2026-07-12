@@ -6,86 +6,66 @@ struct GeneralSettingsView: View {
     @State private var explainsPermission = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("General")
-                .font(.title2)
-                .padding(.bottom, 28)
-
-            Text("Pinch")
-                .font(.callout)
-                .bold()
-                .padding(.bottom, 10)
-
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Accessibility")
-                            .font(.callout)
+        Form {
+            Section("Accessibility") {
+                LabeledContent {
+                    HStack {
+                        Label(permissionLabel, systemImage: permissionIcon)
+                            .foregroundStyle(
+                                settings.permissionStatus == .granted ? .green : .secondary
+                            )
+                        Button(
+                            settings.permissionStatus == .granted ? "Open Settings" : "Grant Access",
+                            action: permissionAction
+                        )
+                    }
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text("Accessibility Access")
                         Text(permissionDetail)
-                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Label(permissionLabel, systemImage: permissionIcon)
-                        .foregroundStyle(settings.permissionStatus == .granted ? .green : .secondary)
-                    Button(
-                        settings.permissionStatus == .granted ? "Open Settings" : "Grant Access",
-                        action: permissionAction
-                    )
                 }
-                .controlSize(.small)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+            }
 
-                Divider()
-                    .padding(.horizontal, 14)
-
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
+            Section("Keyboard Shortcut") {
+                LabeledContent {
+                    HStack {
+                        if settings.recorder.isRecording {
+                            Button("Cancel", action: settings.cancelRecording)
+                        }
+                        Menu("Shortcut options", systemImage: "ellipsis") {
+                            Button("Restore Option–Space", action: settings.restoreDefault)
+                        }
+                        .labelStyle(.iconOnly)
+                        Button(shortcutButtonLabel, action: settings.beginRecording)
+                            .monospaced()
+                            .accessibilityLabel("Record global shortcut")
+                            .accessibilityValue(shortcutButtonLabel)
+                        if canSave {
+                            Button("Save", action: settings.saveShortcut)
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
+                } label: {
+                    VStack(alignment: .leading) {
                         Text("Open Pinch")
-                            .font(.callout)
                         Text(shortcutDetail)
-                            .font(.caption)
                             .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
                     }
-                    Spacer()
-                    if settings.recorder.isRecording {
-                        Button("Cancel", action: settings.cancelRecording)
-                    }
-                    Menu("Shortcut options", systemImage: "ellipsis") {
-                        Button("Restore Option–Space", action: settings.restoreDefault)
-                    }
-                    .labelStyle(.iconOnly)
-                    Button(shortcutButtonLabel, action: settings.beginRecording)
-                        .buttonStyle(.bordered)
-                        .monospaced()
-                        .accessibilityLabel("Record global shortcut")
-                        .accessibilityValue(shortcutButtonLabel)
-                    if canSave {
-                        Button("Save", action: settings.saveShortcut)
-                            .buttonStyle(.borderedProminent)
-                    }
-                    ShortcutRecorderView(
-                        isRecording: settings.recorder.isRecording,
-                        record: settings.record,
-                        cancel: settings.cancelRecording
-                    )
-                    .frame(width: 1, height: 1)
-                    .accessibilityHidden(true)
                 }
-                .controlSize(.small)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-            }
-            .modifier(SettingsMaterial())
 
-            Spacer()
+                ShortcutRecorderView(
+                    isRecording: settings.recorder.isRecording,
+                    record: settings.record,
+                    cancel: settings.cancelRecording
+                )
+                .frame(width: 1, height: 1)
+                .accessibilityHidden(true)
+            }
         }
-        .frame(maxWidth: 620, alignment: .leading)
-        .padding(.horizontal, 40)
-        .padding(.top, 46)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .formStyle(.grouped)
+        .navigationTitle("General")
         .alert("Allow Accessibility Access?", isPresented: $explainsPermission) {
             Button("Continue", action: settings.requestAccessibilityPermission)
             Button("Cancel", role: .cancel) {}

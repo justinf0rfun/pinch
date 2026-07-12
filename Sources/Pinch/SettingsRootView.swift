@@ -8,51 +8,16 @@ struct SettingsRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(spacing: 4) {
-                Button {
-                    selection = .general
-                } label: {
+            List(selection: $selection) {
+                Section("Pinch") {
                     Label("General", systemImage: "gearshape")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .frame(height: 34)
-                .background(
-                    selection == .general ? Color.primary.opacity(0.08) : Color.clear,
-                    in: .rect(cornerRadius: 9)
-                )
-                .accessibilityAddTraits(selection == .general ? .isSelected : [])
-
-                Button {
-                    selection = .phrases
-                } label: {
+                        .tag(SettingsSection.general)
                     Label("Phrases", systemImage: "text.bubble")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .frame(height: 34)
-                .background(
-                    selection == .phrases ? Color.primary.opacity(0.08) : Color.clear,
-                    in: .rect(cornerRadius: 9)
-                )
-                .accessibilityAddTraits(selection == .phrases ? .isSelected : [])
-
-                Spacer()
-            }
-            .font(.callout)
-            .padding(.horizontal, 10)
-            .padding(.top, 42)
-            .background {
-                ZStack {
-                    Color(nsColor: .windowBackgroundColor)
-                    Rectangle().fill(.thinMaterial)
+                        .tag(SettingsSection.phrases)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 176, ideal: 184, max: 200)
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
             switch selection {
             case .general:
@@ -63,6 +28,6 @@ struct SettingsRootView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar(removing: .sidebarToggle)
-        .frame(minWidth: 640, minHeight: 400)
+        .frame(minWidth: 700, minHeight: 480)
     }
 }
