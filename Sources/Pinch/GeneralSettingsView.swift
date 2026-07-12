@@ -31,7 +31,6 @@ struct GeneralSettingsView: View {
             Section("Keyboard Shortcut") {
                 LabeledContent {
                     HStack {
-                        Button("Restore Default", action: settings.restoreDefault)
                         if settings.recorder.isRecording {
                             ShortcutRecordingIndicator()
                         } else {
@@ -40,6 +39,11 @@ struct GeneralSettingsView: View {
                                 .accessibilityLabel("Record global shortcut")
                                 .accessibilityValue(shortcutButtonLabel)
                         }
+                        Button(action: settings.restoreDefault) {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .accessibilityLabel("Restore default shortcut")
+                        .help("Restore Default")
                     }
                 } label: {
                     VStack(alignment: .leading) {
