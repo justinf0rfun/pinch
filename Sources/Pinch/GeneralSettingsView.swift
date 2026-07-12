@@ -39,10 +39,6 @@ struct GeneralSettingsView: View {
                             .monospaced()
                             .accessibilityLabel("Record global shortcut")
                             .accessibilityValue(shortcutButtonLabel)
-                        if canSave {
-                            Button("Save", action: settings.saveShortcut)
-                                .buttonStyle(.borderedProminent)
-                        }
                     }
                 } label: {
                     VStack(alignment: .leading) {
@@ -76,13 +72,6 @@ struct GeneralSettingsView: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-    }
-
-    private var canSave: Bool {
-        guard let draft = settings.recorder.draft else { return false }
-        return !settings.recorder.isRecording
-            && draft != settings.shortcut.active
-            && draft.validation == .valid
     }
 
     private var shortcutButtonLabel: String {

@@ -45,8 +45,14 @@ final class AppSettings {
 
     func beginRecording() { recorder.beginRecording() }
     func cancelRecording() { recorder.cancel() }
-    func restoreDefault() { recorder.restoreDefault() }
-    func record(_ candidate: Shortcut) { recorder.record(candidate) }
+    func restoreDefault() {
+        recorder.restoreDefault()
+        applyRecordedShortcut()
+    }
+    func record(_ candidate: Shortcut) {
+        recorder.record(candidate)
+        applyRecordedShortcut()
+    }
 
     func saveShortcut() {
         guard let candidate = recorder.draft,
@@ -61,6 +67,12 @@ final class AppSettings {
         recorder = ShortcutRecorderState(active: fallback)
     }
 
+    private func applyRecordedShortcut() {
+        guard let candidate = recorder.draft,
+              candidate.validation == .valid,
+              candidate != shortcut.active else { return }
+        saveShortcut()
+    }
 
     var canUsePinch: Bool { permission.activationDecision == .openPinch }
 
