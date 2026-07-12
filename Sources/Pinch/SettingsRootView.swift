@@ -25,7 +25,6 @@ struct SettingsRootView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbarVisibility(.hidden, for: .windowToolbar)
         .frame(width: 780, height: 500)
     }
 }
