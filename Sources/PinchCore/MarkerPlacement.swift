@@ -9,6 +9,35 @@ public enum MarkerPlacement {
     }
 }
 
+public enum PickerPlacement {
+    public static func origin(
+        near target: CGRect,
+        panelSize: CGSize,
+        visibleFrame: CGRect,
+        anchor: PinchTargetAnchor
+    ) -> CGPoint {
+        let x: CGFloat
+        let y: CGFloat
+        if anchor != .composer {
+            x = anchor == .caret ? target.maxX + 10 : target.minX
+            let above = target.maxY + 10
+            y = above + panelSize.height <= visibleFrame.maxY
+                ? above
+                : target.minY - panelSize.height - 10
+        } else {
+            let right = target.maxX + 10
+            x = right + panelSize.width <= visibleFrame.maxX
+                ? right
+                : target.minX - panelSize.width - 12
+            y = target.minY
+        }
+        return CGPoint(
+            x: min(max(x, visibleFrame.minX), visibleFrame.maxX - panelSize.width),
+            y: min(max(y, visibleFrame.minY), visibleFrame.maxY - panelSize.height)
+        )
+    }
+}
+
 public struct MarkerFrameStabilizer {
     private let stabilityInterval: TimeInterval
     private var candidate: CGRect?

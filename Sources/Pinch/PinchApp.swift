@@ -60,7 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openPinch() {
         session.open()
         guard session.phase == .open else { return }
-        panel.show(near: session.attachmentFrame)
+        panel.show(
+            near: session.attachmentFrame,
+            anchor: session.pickerAnchor
+        )
     }
 
     private func updateMarker() {
@@ -76,7 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         marker.show(near: markerFrame)
         if session.phase == .open || session.phase == .pinching || session.phase == .failed {
-            panel.show(near: session.attachmentFrame)
+            panel.show(
+                near: session.attachmentFrame,
+                anchor: session.pickerAnchor
+            )
         }
         if session.phase == .pinching || session.phase == .delivered || session.phase == .failed {
             delivery.show(from: panel.frame, to: session.attachmentFrame)
@@ -115,7 +121,6 @@ private final class MarkerPanel {
         panel.contentViewController = NSHostingController(
             rootView: MarkerView(session: session)
                 .frame(width: Self.size.width, height: Self.size.height)
-                .environment(\.colorScheme, .light)
         )
         panel.setContentSize(Self.size)
     }
@@ -157,22 +162,19 @@ private final class PinchPanel {
                 panel?.orderOut(nil)
             }
             .frame(width: Self.size.width, height: Self.size.height)
-            .environment(\.colorScheme, .light)
         )
         panel.setContentSize(Self.size)
     }
 
-    func show(near targetFrame: CGRect) {
+    func show(near targetFrame: CGRect, anchor: PinchTargetAnchor) {
         let target = appKitFrame(for: targetFrame)
         let visible = NSScreen.screens.first(where: { $0.frame.intersects(target) })?.visibleFrame
             ?? NSScreen.main?.visibleFrame ?? .zero
-        let preferredX = target.maxX + 10
-        let x = preferredX + panel.frame.width <= visible.maxX
-            ? preferredX
-            : target.minX - panel.frame.width - 12
-        let origin = NSPoint(
-            x: min(max(x, visible.minX), visible.maxX - panel.frame.width),
-            y: min(max(target.midY - panel.frame.height / 2, visible.minY), visible.maxY - panel.frame.height)
+        let origin = PickerPlacement.origin(
+            near: target,
+            panelSize: panel.frame.size,
+            visibleFrame: visible,
+            anchor: anchor
         )
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
@@ -242,7 +244,7 @@ private struct MarkerView: View {
             .contentShape(.circle)
             .scaleEffect(x: isPinching && !reduceMotion ? 0.78 : 1, y: isPinching && !reduceMotion ? 0.92 : 1)
             .rotationEffect(.degrees(isPinching && !reduceMotion ? -7 : 0))
-        .buttonStyle(.plain)
+        .buttonStyle(PinchPressStyle())
         .help("停留 300ms 打开 Pinch")
         .accessibilityLabel("打开 Pinch")
         .accessibilityHint("停留或按下以显示快捷短语")
@@ -271,7 +273,7 @@ private struct QuickSelectionView: View {
                     } label: {
                         PhraseLabel(phrase: phrase, highlighted: session.highlightedPhrase == phrase)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PinchPressStyle())
                     .scaleEffect(
                         x: isSelectedForDelivery(phrase) && !reduceMotion ? 0.72 : 1,
                         y: isSelectedForDelivery(phrase) && !reduceMotion ? 0.92 : 1
@@ -289,8 +291,8 @@ private struct QuickSelectionView: View {
         }
         .padding(8)
         .frame(width: 280, height: 234)
-        .foregroundStyle(.black.opacity(0.84))
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+        .foregroundStyle(.primary)
+        .modifier(PickerMaterial())
         .animation(reduceMotion ? .easeOut(duration: 0.08) : .snappy(duration: 0.24), value: session.phase)
         .onChange(of: session.phase) { _, phase in
             if phase == .delivered || phase == .idle { dismiss() }
@@ -323,7 +325,7 @@ private struct DeliveryView: View {
                     .lineLimit(1)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .glassEffect(.regular, in: .capsule)
+                    .modifier(DeliveryMaterial())
                     .fixedSize()
                     .position(
                         x: reduceMotion ? startX : (hasTravelled ? landingX : startX),
@@ -361,7 +363,7 @@ private struct PhraseLabel: View {
         HStack(spacing: 10) {
             Text(shortcutNumber)
                 .font(.caption.monospaced())
-                .foregroundStyle(.black.opacity(0.5))
+                .foregroundStyle(.secondary)
                 .frame(width: 18)
             Text(phrase)
                 .lineLimit(1)
@@ -370,12 +372,54 @@ private struct PhraseLabel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(highlighted ? Color.black.opacity(0.08) : Color.clear, in: .rect(cornerRadius: 10))
+        .background(highlighted ? Color.primary.opacity(0.08) : Color.clear, in: .rect(cornerRadius: 10))
         .contentShape(.rect)
     }
 
     private var shortcutNumber: String {
         String((PinchSession.builtInPhrases.firstIndex(of: phrase) ?? 0) + 1)
+    }
+}
+
+private struct PinchPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+private struct PickerMaterial: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+                .background(Color(nsColor: .windowBackgroundColor), in: .rect(cornerRadius: 18))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(Color.primary.opacity(0.12))
+                }
+        } else {
+            content.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+        }
+    }
+}
+
+private struct DeliveryMaterial: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(Color(nsColor: .windowBackgroundColor), in: .capsule)
+        } else {
+            content.glassEffect(.regular, in: .capsule)
+        }
     }
 }
 

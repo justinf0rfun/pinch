@@ -166,7 +166,7 @@ func markerPreparationMissCanRetry() async {
 }
 
 @MainActor
-@Test("keyboard selection delivers a numbered phrase and removes its monitor")
+@Test("keyboard selection stays cancellable until insertion begins")
 func numberedSelection() async {
     let integration = TestIntegration()
     let clock = TestClock()
@@ -176,13 +176,57 @@ func numberedSelection() async {
     #expect(integration.isMonitoringKeyboard)
     integration.press(.number(4))
     #expect(session.phase == .pinching)
-    #expect(!integration.isMonitoringKeyboard)
-    #expect(!integration.isMonitoringOutsideClicks)
+    #expect(integration.isMonitoringKeyboard)
+    #expect(integration.isMonitoringOutsideClicks)
 
     await Task.yield()
     await clock.advance()
-    await Task.yield()
+    while session.phase == .pinching { await Task.yield() }
     #expect(integration.text == PinchSession.builtInPhrases[3])
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
+}
+
+@MainActor
+@Test("Escape cancels the pinching phase before it writes")
+func pinchingCanBeCancelled() async {
+    let integration = TestIntegration()
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.open()
+    session.choose(PinchSession.builtInPhrases[0])
+    await Task.yield()
+    integration.press(.escape)
+
+    #expect(session.phase == .idle)
+    #expect(integration.text.isEmpty)
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
+
+    await clock.advance()
+    await Task.yield()
+    #expect(integration.text.isEmpty)
+}
+
+@MainActor
+@Test("clicking outside cancels the pinching phase before it writes")
+func outsideClickCancelsPinching() async {
+    let integration = TestIntegration()
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.open()
+    session.choose(PinchSession.builtInPhrases[0])
+    await Task.yield()
+    integration.clickOutside()
+
+    #expect(session.phase == .idle)
+    #expect(integration.text.isEmpty)
+
+    await clock.advance()
+    await Task.yield()
+    #expect(integration.text.isEmpty)
 }
 
 @MainActor
@@ -250,6 +294,44 @@ func targetIsReplaced() async {
 }
 
 @MainActor
+@Test("secure input appearing before insertion fails without writing")
+func secureInputDuringDelivery() async {
+    let integration = TestIntegration()
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.open()
+    session.choose(PinchSession.builtInPhrases[0])
+    integration.secureInputIsActive = true
+    await clock.advance()
+    while session.phase == .pinching { await Task.yield() }
+
+    #expect(session.phase == .failed)
+    #expect(integration.text.isEmpty)
+}
+
+@MainActor
+@Test("cancelling after a failed delivery removes temporary monitors")
+func failedDeliveryMonitorCleanup() async {
+    let integration = TestIntegration()
+    integration.shouldFail = true
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, clock: clock)
+
+    session.open()
+    session.choose(PinchSession.builtInPhrases[0])
+    await clock.advance()
+    while session.phase == .pinching { await Task.yield() }
+    #expect(integration.isMonitoringKeyboard)
+    #expect(integration.isMonitoringOutsideClicks)
+
+    session.cancel()
+
+    #expect(!integration.isMonitoringKeyboard)
+    #expect(!integration.isMonitoringOutsideClicks)
+}
+
+@MainActor
 @Test("a complete session delivers a phrase and returns to idle")
 func successfulSession() async throws {
     let target = TestIntegration()
@@ -273,6 +355,7 @@ func successfulSession() async throws {
     #expect(target.text == "按你的最佳判断继续")
 
     await Task.yield()
+    #expect(await clock.nextDuration() == .milliseconds(150))
     await clock.advance()
     while session.phase == .delivered { await Task.yield() }
     #expect(session.phase == .idle)
