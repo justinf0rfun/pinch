@@ -14,13 +14,17 @@ struct ShortcutRecorderView: NSViewRepresentable {
     func updateNSView(_ view: RecorderNSView, context: Context) {
         view.record = record
         view.cancel = cancel
+        view.isRecording = isRecording
         if isRecording, view.window?.firstResponder !== view {
             view.window?.makeFirstResponder(view)
+        } else if !isRecording, view.window?.firstResponder === view {
+            view.window?.makeFirstResponder(nil)
         }
     }
 }
 
 final class RecorderNSView: NSView {
+    var isRecording = false
     var record: (Shortcut) -> Void
     var cancel: () -> Void
 
@@ -36,6 +40,10 @@ final class RecorderNSView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
+        guard isRecording else {
+            super.keyDown(with: event)
+            return
+        }
         if event.keyCode == 53 {
             cancel()
             return
