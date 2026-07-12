@@ -178,9 +178,29 @@ func numberedSelection() async {
     await Task.yield()
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
-    #expect(integration.text == PinchSession.builtInPhrases[3])
+    #expect(integration.text == session.phrases[3].insertionText)
     #expect(!integration.isMonitoringKeyboard)
     #expect(!integration.isMonitoringOutsideClicks)
+}
+
+@MainActor
+@Test("picker shortcuts immediately use the first nine ordered library phrases")
+func customPhraseSelection() async throws {
+    let fixtureURL = URL.temporaryDirectory.appending(path: UUID().uuidString).appending(path: "phrases.json")
+    let library = try PhraseLibrary(fileURL: fixtureURL, localeIdentifier: "en")
+    let custom = try library.create(displayName: "Custom", insertionText: "Insert this custom phrase")
+    try library.move(fromOffsets: IndexSet(integer: library.phrases.count - 1), toOffset: 0)
+    let integration = TestIntegration()
+    let clock = TestClock()
+    let session = PinchSession(integration: integration, phraseLibrary: library, clock: clock)
+
+    session.open()
+    integration.press(.number(1))
+    await clock.advance()
+    while session.phase == .pinching { await Task.yield() }
+
+    #expect(session.selectedPhrase == custom.insertionText)
+    #expect(integration.text == custom.insertionText)
 }
 
 @MainActor
@@ -191,7 +211,7 @@ func pinchingCanBeCancelled() async {
     let session = PinchSession(integration: integration, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await Task.yield()
     integration.press(.escape)
 
@@ -213,7 +233,7 @@ func outsideClickCancelsPinching() async {
     let session = PinchSession(integration: integration, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await Task.yield()
     integration.clickOutside()
 
@@ -236,12 +256,12 @@ func keyboardNavigationAndCancellation() async {
     integration.press(.down)
     integration.press(.down)
     integration.press(.up)
-    #expect(session.highlightedPhrase == PinchSession.builtInPhrases[1])
+    #expect(session.highlightedPhrase == session.phrases[1].insertionText)
     integration.press(.return)
     await Task.yield()
     await clock.advance()
     await Task.yield()
-    #expect(integration.text == PinchSession.builtInPhrases[1])
+    #expect(integration.text == session.phrases[1].insertionText)
 
     await Task.yield()
     await clock.advance()
@@ -261,7 +281,7 @@ func targetDisappears() async {
 
     session.open()
     integration.currentTarget = nil
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await Task.yield()
     await clock.advance()
     await Task.yield()
@@ -280,7 +300,7 @@ func targetIsReplaced() async {
 
     session.open()
     integration.currentTarget = PinchTarget(identifier: "replacement")
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await Task.yield()
     await clock.advance()
     await Task.yield()
@@ -297,7 +317,7 @@ func secureInputDuringDelivery() async {
     let session = PinchSession(integration: integration, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     integration.secureInputIsActive = true
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
@@ -315,7 +335,7 @@ func failedDeliveryMonitorCleanup() async {
     let session = PinchSession(integration: integration, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
     #expect(integration.isMonitoringKeyboard)
@@ -334,13 +354,13 @@ func successfulSession() async throws {
     let clock = TestClock()
     let session = PinchSession(integration: target, clock: clock)
 
-    #expect(PinchSession.builtInPhrases.count == 6)
+    #expect(session.phrases.count == 6)
     session.open()
     #expect(session.phase == .open)
     #expect(target.captureCount == 1)
     #expect(target.prepareCount == 1)
 
-    session.choose(PinchSession.builtInPhrases[3])
+    session.choose(session.phrases[3])
     #expect(session.phase == .pinching)
 
     await Task.yield()
@@ -366,7 +386,7 @@ func failedSessionCanRecover() async {
     let session = PinchSession(integration: target, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     #expect(session.phase == .pinching)
 
     await clock.advance()
@@ -377,7 +397,7 @@ func failedSessionCanRecover() async {
     #expect(session.phase == .open)
     #expect(target.prepareCount == 2)
     target.shouldFail = false
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
     #expect(session.phase == .delivered)
@@ -392,7 +412,7 @@ func failedSelectionRefreshCancelsSession() async {
     let session = PinchSession(integration: target, clock: clock)
 
     session.open()
-    session.choose(PinchSession.builtInPhrases[0])
+    session.choose(session.phrases[0])
     await clock.advance()
     while session.phase == .pinching { await Task.yield() }
     target.shouldFailPrepare = true

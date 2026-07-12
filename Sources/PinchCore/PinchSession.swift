@@ -53,14 +53,7 @@ public final class PinchSession {
         case idle, hovering, open, pinching, delivered, failed
     }
 
-    public static let builtInPhrases = [
-        "确认，继续",
-        "允许本次操作",
-        "使用推荐选项",
-        "按你的最佳判断继续",
-        "暂不执行，请先解释风险",
-        "取消"
-    ]
+    public var phrases: [Phrase] { phraseLibrary.phrases }
 
     public private(set) var phase = Phase.idle
     public private(set) var selectedPhrase: String?
@@ -68,6 +61,7 @@ public final class PinchSession {
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
     public var markerFrame: CGRect? { markerTarget?.attachmentFrame }
     private let integration: PinchIntegration
+    private let phraseLibrary: PhraseLibrary
     private let clock: SessionClock
     private var target: PinchTarget?
     private var markerTarget: PinchTarget?
@@ -75,11 +69,27 @@ public final class PinchSession {
     private var deliveryTask: Task<Void, Never>?
 
     public convenience init(integration: PinchIntegration) {
-        self.init(integration: integration, clock: ContinuousSessionClock())
+        guard let phraseLibrary = try? PhraseLibrary() else {
+            fatalError("Unable to load the local phrase library")
+        }
+        self.init(integration: integration, phraseLibrary: phraseLibrary, clock: ContinuousSessionClock())
     }
 
-    init(integration: PinchIntegration, clock: SessionClock) {
+    public convenience init(integration: PinchIntegration, phraseLibrary: PhraseLibrary) {
+        self.init(integration: integration, phraseLibrary: phraseLibrary, clock: ContinuousSessionClock())
+    }
+
+    convenience init(integration: PinchIntegration, clock: SessionClock) {
+        let fileURL = URL.temporaryDirectory.appending(path: UUID().uuidString).appending(path: "phrases.json")
+        guard let phraseLibrary = try? PhraseLibrary(fileURL: fileURL, localeIdentifier: "zh-Hans") else {
+            fatalError("Unable to create the test phrase library")
+        }
+        self.init(integration: integration, phraseLibrary: phraseLibrary, clock: clock)
+    }
+
+    init(integration: PinchIntegration, phraseLibrary: PhraseLibrary, clock: SessionClock) {
         self.integration = integration
+        self.phraseLibrary = phraseLibrary
         self.clock = clock
     }
 
@@ -151,6 +161,10 @@ public final class PinchSession {
         }
     }
 
+    public func choose(_ phrase: Phrase) {
+        choose(phrase.insertionText)
+    }
+
     public func cancel() {
         guard phase == .hovering || phase == .open || phase == .pinching || phase == .failed else { return }
         markerTask?.cancel()
@@ -173,8 +187,8 @@ public final class PinchSession {
         guard phase == .open || phase == .failed else { return }
         switch key {
         case .number(let number):
-            guard Self.builtInPhrases.indices.contains(number - 1) else { return }
-            choose(Self.builtInPhrases[number - 1])
+            guard phrases.prefix(9).indices.contains(number - 1) else { return }
+            choose(phrases[number - 1])
         case .up:
             moveHighlight(by: -1)
         case .down:
@@ -187,9 +201,11 @@ public final class PinchSession {
     }
 
     private func moveHighlight(by offset: Int) {
-        let current = highlightedPhrase.flatMap(Self.builtInPhrases.firstIndex) ?? 0
-        let next = min(max(current + offset, 0), Self.builtInPhrases.count - 1)
-        highlightedPhrase = Self.builtInPhrases[next]
+        let insertionTexts = phrases.map(\.insertionText)
+        guard !insertionTexts.isEmpty else { return }
+        let current = highlightedPhrase.flatMap(insertionTexts.firstIndex) ?? 0
+        let next = min(max(current + offset, 0), insertionTexts.count - 1)
+        highlightedPhrase = insertionTexts[next]
     }
 
     public func recover() {
@@ -228,7 +244,7 @@ public final class PinchSession {
 
     private func finishOpening() {
         markerTask = nil
-        highlightedPhrase = Self.builtInPhrases.first
+        highlightedPhrase = phrases.first?.insertionText
         phase = .open
         integration.startKeyboardMonitor { [weak self] key in
             self?.handle(key)

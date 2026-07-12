@@ -184,8 +184,15 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     defer { pickerWindow.orderOut(nil) }
 
-    let phrase = "确认，继续"
-    try integration.deliver(phrase, to: target)
+    let libraryURL = URL.temporaryDirectory
+        .appending(path: UUID().uuidString)
+        .appending(path: "phrases.json")
+    let library = try PhraseLibrary(fileURL: libraryURL, localeIdentifier: "en")
+    let customPhrase = try library.create(
+        displayName: "ChatGPT smoke",
+        insertionText: "Custom phrase from the local library"
+    )
+    try integration.deliver(customPhrase.insertionText, to: target)
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     let inserted = accessibilityString(composer, kAXValueAttribute)
     let insertionPoint = accessibilityRange(composer, kAXSelectedTextRangeAttribute)
@@ -198,8 +205,8 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     didRestoreDraft = composerMatchesDraft(composer, draft: originalDraft)
 
-    #expect(inserted == "before \(phrase) after")
-    #expect(insertionPoint?.location == 7 + (phrase as NSString).length)
+    #expect(inserted == "before \(customPhrase.insertionText) after")
+    #expect(insertionPoint?.location == 7 + (customPhrase.insertionText as NSString).length)
     #expect(insertionPoint?.length == 0)
     #expect(didRestoreDraft)
 }

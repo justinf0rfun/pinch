@@ -10,8 +10,14 @@ struct PinchApp: App {
     var body: some Scene {
         MenuBarExtra("Pinch", systemImage: "hand.pinch") {
             Button("Open Pinch (⌥Space)") { appDelegate.openPinch() }
+            SettingsLink {
+                Label("Manage Phrases", systemImage: "text.badge.plus")
+            }
             Divider()
             Button("Quit Pinch") { NSApp.terminate(nil) }
+        }
+        Settings {
+            PhraseManagementView(library: appDelegate.phraseLibrary)
         }
     }
 }
@@ -19,7 +25,8 @@ struct PinchApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let integration = MacOSPinchIntegration()
-    private lazy var session = PinchSession(integration: integration)
+    let phraseLibrary: PhraseLibrary
+    private lazy var session = PinchSession(integration: integration, phraseLibrary: phraseLibrary)
     private lazy var panel = PinchPanel(session: session)
     private lazy var marker = MarkerPanel(session: session)
     private lazy var delivery = DeliveryPanel(session: session)
@@ -27,6 +34,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var markerTimer: Timer?
     private var markerDragMonitor: Any?
     private var markerStabilizer = MarkerFrameStabilizer()
+
+    override init() {
+        do {
+            phraseLibrary = try PhraseLibrary()
+        } catch {
+            fatalError("Unable to load the local phrase library: \(error)")
+        }
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -259,21 +275,28 @@ private struct QuickSelectionView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 4) {
-                ForEach(PinchSession.builtInPhrases, id: \.self) { phrase in
-                    Button {
-                        session.choose(phrase)
-                    } label: {
-                        PhraseLabel(phrase: phrase, highlighted: session.highlightedPhrase == phrase)
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(session.phrases) { phrase in
+                        Button {
+                            session.choose(phrase)
+                        } label: {
+                            PhraseLabel(
+                                phrase: phrase,
+                                shortcutNumber: session.phrases.firstIndex(of: phrase).map { $0 + 1 },
+                                highlighted: session.highlightedPhrase == phrase.insertionText
+                            )
+                        }
+                        .buttonStyle(PinchPressStyle())
+                        .scaleEffect(
+                            x: isSelectedForDelivery(phrase.insertionText) && !reduceMotion ? 0.72 : 1,
+                            y: isSelectedForDelivery(phrase.insertionText) && !reduceMotion ? 0.92 : 1
+                        )
+                        .opacity(deliveryOpacity(for: phrase.insertionText))
                     }
-                    .buttonStyle(PinchPressStyle())
-                    .scaleEffect(
-                        x: isSelectedForDelivery(phrase) && !reduceMotion ? 0.72 : 1,
-                        y: isSelectedForDelivery(phrase) && !reduceMotion ? 0.92 : 1
-                    )
-                    .opacity(deliveryOpacity(for: phrase))
                 }
             }
+            .scrollIndicators(.hidden)
 
             if session.phase == .failed {
                 Button("重试", systemImage: "arrow.uturn.backward") { session.recover() }
@@ -349,16 +372,17 @@ private struct DeliveryView: View {
 }
 
 private struct PhraseLabel: View {
-    let phrase: String
+    let phrase: Phrase
+    let shortcutNumber: Int?
     let highlighted: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(shortcutNumber)
+            Text(shortcutLabel)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .frame(width: 18)
-            Text(phrase)
+            Text(phrase.displayName)
                 .lineLimit(1)
             Spacer()
         }
@@ -369,8 +393,8 @@ private struct PhraseLabel: View {
         .contentShape(.rect)
     }
 
-    private var shortcutNumber: String {
-        String((PinchSession.builtInPhrases.firstIndex(of: phrase) ?? 0) + 1)
+    private var shortcutLabel: String {
+        shortcutNumber.flatMap { $0 <= 9 ? String($0) : nil } ?? ""
     }
 }
 
