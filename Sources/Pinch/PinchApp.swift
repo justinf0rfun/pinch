@@ -15,10 +15,10 @@ struct PinchApp: App {
             Divider()
             Button("Quit Pinch") { NSApp.terminate(nil) }
         }
-        Settings {
+        Window("Pinch Settings", id: "settings") {
             SettingsRootView(library: appDelegate.phraseLibrary, settings: appDelegate.settings)
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 780, height: 500)
     }
 }
 

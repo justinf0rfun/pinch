@@ -15,68 +15,72 @@ struct GeneralSettingsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 24)
 
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "accessibility")
-                    .font(.title3)
-                    .frame(width: 28)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Accessibility")
-                        .font(.headline)
-                    Text(permissionDetail)
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "accessibility")
+                        .font(.title3)
+                        .frame(width: 28)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Accessibility")
+                            .font(.headline)
+                        Text(permissionDetail)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Label(permissionLabel, systemImage: permissionIcon)
+                        .foregroundStyle(settings.permissionStatus == .granted ? .green : .secondary)
+                    Button(
+                        settings.permissionStatus == .granted ? "Open Settings" : "Grant Access",
+                        action: permissionAction
+                    )
                 }
-                Spacer()
-                Label(permissionLabel, systemImage: permissionIcon)
-                    .foregroundStyle(settings.permissionStatus == .granted ? .green : .secondary)
-                Button(
-                    settings.permissionStatus == .granted ? "Open Settings" : "Grant Access",
-                    action: permissionAction
-                )
-            }
-            .padding(.vertical, 16)
+                .padding(16)
 
-            Divider()
+                Divider()
+                    .padding(.horizontal, 16)
 
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "command")
-                    .font(.title3)
-                    .frame(width: 28)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "command")
+                        .font(.title3)
+                        .frame(width: 28)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Global Shortcut")
+                            .font(.headline)
+                        Text(shortcutDetail)
+                            .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
+                    }
+                    Spacer()
+                    if settings.recorder.isRecording {
+                        Button("Cancel", action: settings.cancelRecording)
+                    }
+                    Menu("Shortcut options", systemImage: "ellipsis") {
+                        Button("Restore Option–Space", action: settings.restoreDefault)
+                    }
+                    .labelStyle(.iconOnly)
+                    Button(shortcutButtonLabel, action: settings.beginRecording)
+                        .buttonStyle(.bordered)
+                        .monospaced()
+                        .accessibilityLabel("Record global shortcut")
+                        .accessibilityValue(shortcutButtonLabel)
+                    if canSave {
+                        Button("Save", action: settings.saveShortcut)
+                            .buttonStyle(.borderedProminent)
+                    }
+                    ShortcutRecorderView(
+                        isRecording: settings.recorder.isRecording,
+                        record: settings.record,
+                        cancel: settings.cancelRecording
+                    )
+                    .frame(width: 1, height: 1)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Global Shortcut")
-                        .font(.headline)
-                    Text(shortcutDetail)
-                        .foregroundStyle(shortcutMessage == nil ? Color.secondary : Color.red)
                 }
-                Spacer()
-                if settings.recorder.isRecording {
-                    Button("Cancel", action: settings.cancelRecording)
-                }
-                Menu("Shortcut options", systemImage: "ellipsis") {
-                    Button("Restore Option–Space", action: settings.restoreDefault)
-                }
-                .labelStyle(.iconOnly)
-                Button(shortcutButtonLabel, action: settings.beginRecording)
-                    .buttonStyle(.bordered)
-                    .monospaced()
-                    .accessibilityLabel("Record global shortcut")
-                    .accessibilityValue(shortcutButtonLabel)
-                if canSave {
-                    Button("Save", action: settings.saveShortcut)
-                        .buttonStyle(.borderedProminent)
-                }
-                ShortcutRecorderView(
-                    isRecording: settings.recorder.isRecording,
-                    record: settings.record,
-                    cancel: settings.cancelRecording
-                )
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
+                .padding(16)
             }
-            .padding(.vertical, 16)
+            .modifier(SettingsMaterial())
 
             Spacer()
         }

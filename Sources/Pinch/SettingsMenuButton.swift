@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct SettingsMenuButton: View {
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Button("Settings…", systemImage: "gearshape", action: showSettings)
@@ -10,6 +10,6 @@ struct SettingsMenuButton: View {
 
     private func showSettings() {
         NSApp.activate()
-        openSettings()
+        openWindow(id: "settings")
     }
 }
