@@ -33,7 +33,7 @@ struct GeneralSettingsView: View {
                     HStack {
                         Button("Restore Default", action: settings.restoreDefault)
                         if settings.recorder.isRecording {
-                            Button("Cancel", action: settings.cancelRecording)
+                            ShortcutRecordingIndicator()
                         } else {
                             Button(shortcutButtonLabel, action: settings.beginRecording)
                                 .monospaced()
