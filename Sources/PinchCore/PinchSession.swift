@@ -1,29 +1,19 @@
 import Foundation
 import CoreGraphics
 
-public enum PinchTargetAnchor: Equatable, Sendable {
-    case composer, caret, input, prompt
-}
-
 public struct PinchTarget: Equatable, Sendable {
     public let identifier: String
     public let editableFrame: CGRect
     public let attachmentFrame: CGRect
-    public let supportsMarker: Bool
-    public let anchor: PinchTargetAnchor
 
     public init(
         identifier: String,
         editableFrame: CGRect = .zero,
-        attachmentFrame: CGRect? = nil,
-        supportsMarker: Bool = false,
-        anchor: PinchTargetAnchor? = nil
+        attachmentFrame: CGRect? = nil
     ) {
         self.identifier = identifier
         self.editableFrame = editableFrame
         self.attachmentFrame = attachmentFrame ?? editableFrame
-        self.supportsMarker = supportsMarker
-        self.anchor = anchor ?? (supportsMarker ? .composer : .input)
     }
 }
 
@@ -76,7 +66,6 @@ public final class PinchSession {
     public private(set) var selectedPhrase: String?
     public private(set) var highlightedPhrase: String?
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
-    public var pickerAnchor: PinchTargetAnchor { target?.anchor ?? .input }
     public var markerFrame: CGRect? { markerTarget?.attachmentFrame }
     private let integration: PinchIntegration
     private let clock: SessionClock
@@ -110,7 +99,6 @@ public final class PinchSession {
     public func refreshMarker() {
         guard phase == .idle else { return }
         markerTarget = try? integration.captureTarget()
-        if markerTarget?.supportsMarker != true { markerTarget = nil }
     }
 
     public func beginMarkerHover() {

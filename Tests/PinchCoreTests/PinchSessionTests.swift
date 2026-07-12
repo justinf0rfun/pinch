@@ -11,8 +11,7 @@ func markerHoverCancellation() async {
     integration.currentTarget = PinchTarget(
         identifier: "codex-composer",
         editableFrame: editorFrame,
-        attachmentFrame: composerFrame,
-        supportsMarker: true
+        attachmentFrame: composerFrame
     )
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)
@@ -38,8 +37,7 @@ func markerClickActivation() async {
     integration.currentTarget = PinchTarget(
         identifier: "codex-composer",
         editableFrame: CGRect(x: 10, y: 20, width: 300, height: 44),
-        attachmentFrame: composerFrame,
-        supportsMarker: true
+        attachmentFrame: composerFrame
     )
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)
@@ -62,7 +60,7 @@ func markerClickActivation() async {
 @Test("remaining over the Codex marker for 300 ms opens the picker")
 func markerHoverActivation() async {
     let integration = TestIntegration()
-    integration.currentTarget = PinchTarget(identifier: "codex-composer", supportsMarker: true)
+    integration.currentTarget = PinchTarget(identifier: "codex-composer")
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)
 
@@ -103,8 +101,7 @@ func appSwitchRestoresMarkerAndShortcut() {
     integration.currentTarget = PinchTarget(
         identifier: "chatgpt-composer",
         editableFrame: composerFrame,
-        attachmentFrame: composerFrame,
-        supportsMarker: true
+        attachmentFrame: composerFrame
     )
     session.refreshMarker()
     #expect(session.markerFrame == composerFrame)
@@ -138,8 +135,7 @@ func outsideClickDismissesOpenPicker() {
 func markerPreparationMissCanRetry() async {
     let integration = TestIntegration()
     integration.currentTarget = PinchTarget(
-        identifier: "chatgpt-composer",
-        supportsMarker: true
+        identifier: "chatgpt-composer"
     )
     let clock = TestClock()
     let session = PinchSession(integration: integration, clock: clock)

@@ -15,15 +15,15 @@ Build the production app and run all tests with one command:
 swift test
 ```
 
-Run the app with `swift run Pinch`, then press **Option-Space** while an
-editable, non-secure text field is focused. Pinch inserts the selected phrase
-through macOS Accessibility without submitting it. The old
+Run the app with `swift run Pinch`, then press **Option-Space** while the
+ChatGPT composer is focused. Pinch inserts the selected phrase without
+submitting it. The old
 `Sources/PinchPrototype` code remains only as throwaway interaction evidence
 and is not part of the package build.
 
-The permission-gated native text-field smoke test can be run from an
-Accessibility-authorized terminal with:
+The permission-gated ChatGPT smoke test can be run from an
+Accessibility-authorized shell with:
 
 ```sh
-PINCH_RUN_AX_SMOKE=1 swift test --filter directAccessibilityInsertionSmokeTest
+PINCH_RUN_CHATGPT_AX_SMOKE=1 swift test --filter chatGPTAccessibilityInsertionSmokeTest
 ```

@@ -60,10 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openPinch() {
         session.open()
         guard session.phase == .open else { return }
-        panel.show(
-            near: session.attachmentFrame,
-            anchor: session.pickerAnchor
-        )
+        panel.show(near: session.attachmentFrame)
     }
 
     private func updateMarker() {
@@ -79,10 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         marker.show(near: markerFrame)
         if session.phase == .open || session.phase == .pinching || session.phase == .failed {
-            panel.show(
-                near: session.attachmentFrame,
-                anchor: session.pickerAnchor
-            )
+            panel.show(near: session.attachmentFrame)
         }
         if session.phase == .pinching || session.phase == .delivered || session.phase == .failed {
             delivery.show(from: panel.frame, to: session.attachmentFrame)
@@ -166,15 +160,14 @@ private final class PinchPanel {
         panel.setContentSize(Self.size)
     }
 
-    func show(near targetFrame: CGRect, anchor: PinchTargetAnchor) {
+    func show(near targetFrame: CGRect) {
         let target = appKitFrame(for: targetFrame)
         let visible = NSScreen.screens.first(where: { $0.frame.intersects(target) })?.visibleFrame
             ?? NSScreen.main?.visibleFrame ?? .zero
         let origin = PickerPlacement.origin(
             near: target,
             panelSize: panel.frame.size,
-            visibleFrame: visible,
-            anchor: anchor
+            visibleFrame: visible
         )
         panel.setFrameOrigin(origin)
         panel.orderFrontRegardless()
