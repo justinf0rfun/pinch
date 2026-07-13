@@ -502,7 +502,12 @@ private struct DeliveryMaterial: ViewModifier {
 @MainActor
 private func configureFloatingPanel(_ panel: NSPanel) {
     panel.level = .floating
-    panel.collectionBehavior = [.canJoinAllApplications, .fullScreenAuxiliary, .transient]
+    panel.collectionBehavior = [
+        .canJoinAllSpaces,
+        .canJoinAllApplications,
+        .fullScreenAuxiliary,
+        .transient
+    ]
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
     panel.isOpaque = false
