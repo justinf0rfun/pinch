@@ -123,9 +123,8 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
     let integration = MacOSPinchIntegration()
-    guard waitForChatGPTTarget(integration) else {
-        throw MacOSPinchIntegration.IntegrationError.noEditableTarget
-    }
+    _ = try? integration.captureTarget()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.1))
     guard let composer = focusedChatGPTComposer(application: chatGPT) else {
         throw MacOSPinchIntegration.IntegrationError.noEditableTarget
     }
@@ -135,6 +134,9 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
         kCFBooleanTrue
     ) == .success else { throw MacOSPinchIntegration.IntegrationError.noEditableTarget }
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    guard waitForChatGPTTarget(integration) else {
+        throw MacOSPinchIntegration.IntegrationError.noEditableTarget
+    }
 
     let originalValue = accessibilityString(composer, kAXValueAttribute) ?? ""
     let originalDraft = composerContainsDOMClass("placeholder", below: composer) ? "" : originalValue
