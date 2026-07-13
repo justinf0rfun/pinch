@@ -123,7 +123,9 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
     let integration = MacOSPinchIntegration()
-    _ = try integration.captureTarget()
+    guard waitForChatGPTTarget(integration) else {
+        throw MacOSPinchIntegration.IntegrationError.noEditableTarget
+    }
     guard let composer = focusedChatGPTComposer(application: chatGPT) else {
         throw MacOSPinchIntegration.IntegrationError.noEditableTarget
     }
@@ -211,6 +213,15 @@ func chatGPTAccessibilityInsertionSmokeTest() throws {
     #expect(insertionPoint?.location == 7 + (customPhrase.insertionText as NSString).length)
     #expect(insertionPoint?.length == 0)
     #expect(didRestoreDraft)
+}
+
+@MainActor
+private func waitForChatGPTTarget(_ integration: MacOSPinchIntegration) -> Bool {
+    for _ in 0..<3 {
+        if (try? integration.captureTarget()) != nil { return true }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    }
+    return false
 }
 
 private func focusedChatGPTComposer(application: NSRunningApplication) -> AXUIElement? {

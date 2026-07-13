@@ -15,6 +15,10 @@ public struct PinchTarget: Equatable, Sendable {
         self.editableFrame = editableFrame
         self.attachmentFrame = attachmentFrame ?? editableFrame
     }
+
+    public static func == (lhs: PinchTarget, rhs: PinchTarget) -> Bool {
+        lhs.identifier == rhs.identifier
+    }
 }
 
 public enum PinchKey: Equatable, Sendable {
@@ -24,6 +28,7 @@ public enum PinchKey: Equatable, Sendable {
 @MainActor
 public protocol PinchIntegration: AnyObject {
     func captureTarget() throws -> PinchTarget
+    func refreshTarget(_ target: PinchTarget) throws -> PinchTarget
     func prepareDelivery(to target: PinchTarget) throws
     func deliver(_ phrase: String, to target: PinchTarget) throws
     func startKeyboardMonitor(_ handler: @escaping @MainActor (PinchKey) -> Void)
@@ -33,6 +38,7 @@ public protocol PinchIntegration: AnyObject {
 }
 
 public extension PinchIntegration {
+    func refreshTarget(_ target: PinchTarget) throws -> PinchTarget { target }
     func prepareDelivery(to target: PinchTarget) throws {}
 }
 
@@ -53,14 +59,9 @@ public final class PinchSession {
         case idle, hovering, open, pinching, delivered, failed
     }
 
-    public enum Failure: Equatable {
-        case targetUnavailable
-    }
-
     public var phrases: [Phrase] { phraseLibrary.phrases }
 
     public private(set) var phase = Phase.idle
-    public private(set) var failure: Failure?
     public private(set) var selectedPhrase: Phrase?
     public private(set) var highlightedPhraseID: Phrase.ID?
     public var attachmentFrame: CGRect { target?.attachmentFrame ?? .zero }
@@ -112,8 +113,18 @@ public final class PinchSession {
     }
 
     public func refreshMarker() {
-        guard phase == .idle else { return }
-        markerTarget = try? integration.captureTarget()
+        if phase == .idle {
+            markerTarget = try? integration.captureTarget()
+            return
+        }
+        guard phase != .delivered, phase != .failed, let target else { return }
+        do {
+            let refreshedTarget = try integration.refreshTarget(target)
+            self.target = refreshedTarget
+            markerTarget = refreshedTarget
+        } catch {
+            failTarget()
+        }
     }
 
     public func beginMarkerHover() {
@@ -146,7 +157,6 @@ public final class PinchSession {
             do {
                 try integration.deliver(phrase.insertionText, to: target)
                 phase = .delivered
-                failure = nil
                 await clock.sleep(for: .milliseconds(150))
                 guard !Task.isCancelled, phase == .delivered else { return }
                 phase = .idle
@@ -155,15 +165,7 @@ public final class PinchSession {
                 self.target = nil
                 deliveryTask = nil
             } catch {
-                phase = .failed
-                failure = .targetUnavailable
-                deliveryTask = nil
-                integration.startKeyboardMonitor { [weak self] key in
-                    self?.handle(key)
-                }
-                integration.startOutsideClickMonitor { [weak self] in
-                    self?.cancel()
-                }
+                failTarget()
             }
         }
     }
@@ -174,7 +176,12 @@ public final class PinchSession {
     }
 
     public func targetApplicationDidTerminate() {
-        reset(clearMarker: true)
+        markerTarget = nil
+        if phase == .idle {
+            reset(clearMarker: true)
+        } else {
+            failTarget()
+        }
     }
 
     private func reset(clearMarker: Bool) {
@@ -187,7 +194,6 @@ public final class PinchSession {
         target = nil
         selectedPhrase = nil
         highlightedPhraseID = nil
-        failure = nil
         if clearMarker { markerTarget = nil }
         phase = .idle
     }
@@ -224,16 +230,32 @@ public final class PinchSession {
 
     public func recover() {
         guard phase == .failed else { return }
-        guard let target else {
-            cancel()
-            return
-        }
         do {
-            try integration.prepareDelivery(to: target)
-            failure = nil
+            let freshTarget = try integration.captureTarget()
+            try integration.prepareDelivery(to: freshTarget)
+            target = freshTarget
+            markerTarget = freshTarget
             phase = .open
         } catch {
-            cancel()
+            phase = .failed
+        }
+    }
+
+    private func failTarget() {
+        markerTask?.cancel()
+        markerTask = nil
+        deliveryTask?.cancel()
+        deliveryTask = nil
+        integration.stopKeyboardMonitor()
+        integration.stopOutsideClickMonitor()
+        markerTarget = nil
+        selectedPhrase = nil
+        phase = .failed
+        integration.startKeyboardMonitor { [weak self] key in
+            self?.handle(key)
+        }
+        integration.startOutsideClickMonitor { [weak self] in
+            self?.cancel()
         }
     }
 

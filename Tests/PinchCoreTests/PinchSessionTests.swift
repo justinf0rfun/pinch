@@ -131,10 +131,10 @@ func targetApplicationRestart() {
 
     session.targetApplicationDidTerminate()
 
-    #expect(session.phase == .idle)
+    #expect(session.phase == .failed)
     #expect(session.markerFrame == nil)
-    #expect(!integration.isMonitoringKeyboard)
-    #expect(!integration.isMonitoringOutsideClicks)
+    #expect(integration.isMonitoringKeyboard)
+    #expect(integration.isMonitoringOutsideClicks)
 
     let newFrame = CGRect(x: 500, y: 120, width: 420, height: 110)
     integration.currentTarget = PinchTarget(
@@ -142,9 +142,33 @@ func targetApplicationRestart() {
         editableFrame: newFrame,
         attachmentFrame: newFrame
     )
+    session.recover()
+
+    #expect(session.phase == .open)
+    #expect(session.attachmentFrame == newFrame)
+}
+
+@MainActor
+@Test("moving the captured ChatGPT composer updates an open session without following focus")
+func activeTargetFrameRefresh() {
+    let integration = TestIntegration()
+    let original = PinchTarget(
+        identifier: "captured-composer",
+        editableFrame: CGRect(x: 10, y: 20, width: 300, height: 80)
+    )
+    integration.currentTarget = original
+    let session = PinchSession(integration: integration)
+    session.open()
+
+    let moved = PinchTarget(
+        identifier: original.identifier,
+        editableFrame: CGRect(x: 1_500, y: 200, width: 300, height: 80)
+    )
+    integration.currentTarget = moved
     session.refreshMarker()
 
-    #expect(session.markerFrame == newFrame)
+    #expect(session.phase == .open)
+    #expect(session.attachmentFrame == moved.attachmentFrame)
 }
 
 @MainActor
@@ -338,7 +362,6 @@ func targetDisappears() async {
     await Task.yield()
 
     #expect(session.phase == .failed)
-    #expect(session.failure == .targetUnavailable)
     #expect(integration.text.isEmpty)
     #expect(integration.isMonitoringKeyboard)
 }
@@ -395,7 +418,6 @@ func failedDeliveryMonitorCleanup() async {
 
     session.cancel()
 
-    #expect(session.failure == nil)
     #expect(!integration.isMonitoringKeyboard)
     #expect(!integration.isMonitoringOutsideClicks)
 }
@@ -457,8 +479,8 @@ func failedSessionCanRecover() async {
 }
 
 @MainActor
-@Test("failed selection refresh cancels the session cleanly")
-func failedSelectionRefreshCancelsSession() async {
+@Test("a failed fresh session stays recoverable until dismissed")
+func failedFreshSessionCanBeDismissed() async {
     let target = TestIntegration()
     target.shouldFail = true
     let clock = TestClock()
@@ -472,10 +494,15 @@ func failedSelectionRefreshCancelsSession() async {
 
     session.recover()
 
-    #expect(session.phase == .idle)
+    #expect(session.phase == .failed)
     #expect(session.selectedPhrase == nil)
-    #expect(session.highlightedPhraseID == nil)
+    #expect(target.isMonitoringKeyboard)
+
+    session.cancel()
+
+    #expect(session.phase == .idle)
     #expect(!target.isMonitoringKeyboard)
+    #expect(!target.isMonitoringOutsideClicks)
 }
 
 @MainActor
@@ -502,6 +529,13 @@ private final class TestIntegration: PinchIntegration {
     func prepareDelivery(to target: PinchTarget) throws {
         guard !shouldFailPrepare else { throw DeliveryError.rejected }
         prepareCount += 1
+    }
+
+    func refreshTarget(_ target: PinchTarget) throws -> PinchTarget {
+        guard let currentTarget, currentTarget.identifier == target.identifier else {
+            throw DeliveryError.rejected
+        }
+        return currentTarget
     }
 
     func deliver(_ phrase: String, to target: PinchTarget) throws {

@@ -1,33 +1,13 @@
 import ApplicationServices
 import AppKit
 import Carbon.HIToolbox
-import OSLog
 
 @MainActor
 public final class MacOSPinchIntegration: PinchIntegration {
+    public nonisolated static let chatGPTBundleIdentifier = "com.openai.codex"
+
     public enum IntegrationError: Error {
         case accessibilityPermission, noEditableTarget, targetChanged, insertionRejected
-    }
-
-    enum TargetCaptureDiagnostic: Equatable, CustomStringConvertible {
-        case captured
-        case accessibilityDenied
-        case secureInput
-        case noFocusedElement
-        case invalidFrame
-        case unsupported(bundleIdentifier: String?, role: String?, subrole: String?, enabled: Bool, valueSettable: Bool)
-
-        var description: String {
-            switch self {
-            case .captured: "Captured ChatGPT composer"
-            case .accessibilityDenied: "Accessibility permission is not trusted"
-            case .secureInput: "Secure Input is active"
-            case .noFocusedElement: "No focused Accessibility element"
-            case .invalidFrame: "Focused ChatGPT composer has no usable frame"
-            case let .unsupported(bundleIdentifier, role, subrole, enabled, valueSettable):
-                "Unsupported focused element bundle=\(bundleIdentifier ?? "nil") role=\(role ?? "nil") subrole=\(subrole ?? "nil") enabled=\(enabled) valueSettable=\(valueSettable)"
-            }
-        }
     }
 
     struct AccessibilityAncestor: Equatable, Sendable {
@@ -37,7 +17,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
 
     private struct CapturedTargetContext {
         let element: AXUIElement
-        let target: PinchTarget
+        var target: PinchTarget
         let processIdentifier: pid_t
         var preparedDelivery: PreparedDelivery?
     }
@@ -50,8 +30,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     private let systemWide = AXUIElementCreateSystemWide()
-    private let logger = Logger(subsystem: "com.justinf0rfun.pinch", category: "TargetCapture")
-    private var lastCaptureDiagnostic: TargetCaptureDiagnostic?
     private var manualAccessibilityProcessIdentifier: pid_t?
     private var capturedContext: CapturedTargetContext?
     private var keyboardTap: CFMachPort?
@@ -70,12 +48,10 @@ public final class MacOSPinchIntegration: PinchIntegration {
     public func captureTarget() throws -> PinchTarget {
         capturedContext = nil
         guard AXIsProcessTrusted() else {
-            record(.accessibilityDenied)
             throw IntegrationError.accessibilityPermission
         }
         enableManualAccessibilityForFrontmostChatGPT()
         guard !IsSecureEventInputEnabled() else {
-            record(.secureInput)
             throw IntegrationError.noEditableTarget
         }
         let element = try focusedEditableElement()
@@ -83,7 +59,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
         AXUIElementGetPid(element, &processIdentifier)
         let editorFrame = frame(of: element)
         guard !editorFrame.isEmpty, !editorFrame.isNull, !editorFrame.isInfinite else {
-            record(.invalidFrame)
             throw IntegrationError.noEditableTarget
         }
         let composerSurfaceFrame = composerFrame(of: element)
@@ -98,13 +73,30 @@ public final class MacOSPinchIntegration: PinchIntegration {
             processIdentifier: processIdentifier,
             preparedDelivery: nil
         )
-        record(.captured)
         return target
+    }
+
+    public func refreshTarget(_ target: PinchTarget) throws -> PinchTarget {
+        guard var capturedContext, capturedContext.target == target,
+              NSRunningApplication(processIdentifier: capturedContext.processIdentifier) != nil
+        else { throw IntegrationError.targetChanged }
+        let editorFrame = frame(of: capturedContext.element)
+        guard !editorFrame.isEmpty, !editorFrame.isNull, !editorFrame.isInfinite else {
+            throw IntegrationError.targetChanged
+        }
+        let refreshedTarget = PinchTarget(
+            identifier: target.identifier,
+            editableFrame: editorFrame,
+            attachmentFrame: composerFrame(of: capturedContext.element) ?? editorFrame
+        )
+        capturedContext.target = refreshedTarget
+        self.capturedContext = capturedContext
+        return refreshedTarget
     }
 
     private func enableManualAccessibilityForFrontmostChatGPT() {
         guard let application = NSWorkspace.shared.frontmostApplication,
-              application.bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame,
+              application.bundleIdentifier?.caseInsensitiveCompare(Self.chatGPTBundleIdentifier) == .orderedSame,
               application.processIdentifier != manualAccessibilityProcessIdentifier else { return }
         let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
         guard AXUIElementSetAttributeValue(
@@ -113,7 +105,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
             kCFBooleanTrue
         ) == .success else { return }
         manualAccessibilityProcessIdentifier = application.processIdentifier
-        RunLoop.main.run(until: Date.now.addingTimeInterval(0.05))
     }
 
     public func prepareDelivery(to target: PinchTarget) throws {
@@ -404,7 +395,6 @@ public final class MacOSPinchIntegration: PinchIntegration {
             kAXFocusedUIElementAttribute as CFString,
             &value
         ) == .success, let element = value as! AXUIElement? else {
-            record(.noFocusedElement)
             throw IntegrationError.noEditableTarget
         }
 
@@ -440,22 +430,9 @@ public final class MacOSPinchIntegration: PinchIntegration {
             enabled: enabled,
             valueSettable: valueIsSettable.boolValue
         ) else {
-            record(.unsupported(
-                bundleIdentifier: bundleIdentifier,
-                role: roleValue as? String,
-                subrole: subroleValue as? String,
-                enabled: enabled,
-                valueSettable: valueIsSettable.boolValue
-            ))
             throw IntegrationError.noEditableTarget
         }
         return element
-    }
-
-    private func record(_ diagnostic: TargetCaptureDiagnostic) {
-        guard diagnostic != lastCaptureDiagnostic else { return }
-        lastCaptureDiagnostic = diagnostic
-        logger.notice("\(diagnostic.description, privacy: .public)")
     }
 
     private func frame(of element: AXUIElement) -> CGRect {
@@ -517,7 +494,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
         role: String?
     ) -> Bool {
         role == kAXTextAreaRole as String
-            && bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
+            && bundleIdentifier?.caseInsensitiveCompare(chatGPTBundleIdentifier) == .orderedSame
     }
 
     nonisolated static func supportsShortcutTarget(

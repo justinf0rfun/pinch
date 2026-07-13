@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var markerTimer: Timer?
     private var markerDragMonitor: Any?
     private var markerStabilizer = MarkerFrameStabilizer()
+    private let workspaceTerminationMonitor = WorkspaceTerminationMonitor()
 
     override init() {
         do {
@@ -51,12 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(targetApplicationDidTerminate(_:)),
-            name: NSWorkspace.didTerminateApplicationNotification,
-            object: nil
-        )
+        workspaceTerminationMonitor.start { [weak self] application in
+            self?.targetApplicationDidTerminate(application)
+        }
         shortcut = GlobalShortcutRegistration(settings.shortcut.active) { [weak self] in self?.openPinch() }
         if shortcut == nil, settings.shortcut.active != .default {
             shortcut = GlobalShortcutRegistration(.default) { [weak self] in self?.openPinch() }
@@ -79,11 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        NSWorkspace.shared.notificationCenter.removeObserver(
-            self,
-            name: NSWorkspace.didTerminateApplicationNotification,
-            object: nil
-        )
+        workspaceTerminationMonitor.stop()
         session.cancel()
         panel.close()
         marker.close()
@@ -96,13 +90,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shortcut = nil
     }
 
-    @objc private func targetApplicationDidTerminate(_ notification: Notification) {
-        guard let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
-                as? NSRunningApplication,
-              application.bundleIdentifier?.caseInsensitiveCompare("com.openai.codex") == .orderedSame
+    private func targetApplicationDidTerminate(_ application: NSRunningApplication) {
+        guard application.bundleIdentifier?.caseInsensitiveCompare(
+                  MacOSPinchIntegration.chatGPTBundleIdentifier
+              ) == .orderedSame
         else { return }
         session.targetApplicationDidTerminate()
-        panel.close()
         marker.close()
         delivery.close()
     }
@@ -137,7 +130,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateMarker() {
-        if session.phase == .idle { session.refreshMarker() }
+        session.refreshMarker()
+        if session.phase == .open || session.phase == .pinching || session.phase == .failed {
+            panel.show(near: session.attachmentFrame)
+        }
+        if session.phase == .pinching || session.phase == .delivered {
+            delivery.show(from: panel.frame, to: session.attachmentFrame)
+        } else {
+            delivery.close()
+        }
         let stableFrame = markerStabilizer.frame(
             for: session.markerFrame,
             at: ProcessInfo.processInfo.systemUptime,
@@ -148,14 +149,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         marker.show(near: markerFrame)
-        if session.phase == .open || session.phase == .pinching || session.phase == .failed {
-            panel.show(near: session.attachmentFrame)
-        }
-        if session.phase == .pinching || session.phase == .delivered || session.phase == .failed {
-            delivery.show(from: panel.frame, to: session.attachmentFrame)
-        } else {
-            delivery.close()
-        }
     }
 
     private func handleMarkerDrag(_ eventType: NSEvent.EventType) {
@@ -363,7 +356,7 @@ private struct QuickSelectionView: View {
                         .foregroundStyle(.secondary)
                     HStack {
                         Button("Dismiss", action: session.cancel)
-                        Button("Try Again", systemImage: "arrow.uturn.backward", action: session.recover)
+                        Button("Start Fresh", systemImage: "arrow.clockwise", action: session.recover)
                             .buttonStyle(.borderedProminent)
                             .tint(.orange)
                     }
