@@ -2,8 +2,6 @@ import AppKit
 
 @MainActor
 public final class WorkspaceTerminationMonitor {
-    public private(set) var isMonitoring = false
-
     private let notificationCenter: NotificationCenter
     private var observer: NSObjectProtocol?
 
@@ -22,12 +20,10 @@ public final class WorkspaceTerminationMonitor {
                     as? NSRunningApplication else { return }
             MainActor.assumeIsolated { handler(application) }
         }
-        isMonitoring = true
     }
 
     public func stop() {
         if let observer { notificationCenter.removeObserver(observer) }
         observer = nil
-        isMonitoring = false
     }
 }

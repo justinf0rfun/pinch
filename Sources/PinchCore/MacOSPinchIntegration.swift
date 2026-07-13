@@ -77,7 +77,8 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     public func refreshTarget(_ target: PinchTarget) throws -> PinchTarget {
-        guard var capturedContext, capturedContext.target == target,
+        guard var capturedContext,
+              capturedContext.target.identifier == target.identifier,
               NSRunningApplication(processIdentifier: capturedContext.processIdentifier) != nil
         else { throw IntegrationError.targetChanged }
         let editorFrame = frame(of: capturedContext.element)
@@ -108,7 +109,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     public func prepareDelivery(to target: PinchTarget) throws {
-        guard var capturedContext, capturedContext.target == target else {
+        guard var capturedContext, capturedContext.target.identifier == target.identifier else {
             throw IntegrationError.targetChanged
         }
         let state = try currentChatGPTState(of: capturedContext.element)
@@ -122,7 +123,7 @@ public final class MacOSPinchIntegration: PinchIntegration {
     }
 
     public func deliver(_ phrase: String, to target: PinchTarget) throws {
-        guard let capturedContext, target == capturedContext.target else {
+        guard let capturedContext, target.identifier == capturedContext.target.identifier else {
             throw IntegrationError.targetChanged
         }
         guard !IsSecureEventInputEnabled() else { throw IntegrationError.insertionRejected }

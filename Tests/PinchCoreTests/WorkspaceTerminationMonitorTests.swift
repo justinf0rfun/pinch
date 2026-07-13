@@ -16,7 +16,6 @@ func workspaceTerminationMonitorCleanup() {
         userInfo: [NSWorkspace.applicationUserInfoKey: NSRunningApplication.current]
     )
     #expect(notifications == 1)
-    #expect(monitor.isMonitoring)
 
     monitor.stop()
     notificationCenter.post(
@@ -26,5 +25,4 @@ func workspaceTerminationMonitorCleanup() {
     )
 
     #expect(notifications == 1)
-    #expect(!monitor.isMonitoring)
 }

@@ -16,9 +16,6 @@ public struct PinchTarget: Equatable, Sendable {
         self.attachmentFrame = attachmentFrame ?? editableFrame
     }
 
-    public static func == (lhs: PinchTarget, rhs: PinchTarget) -> Bool {
-        lhs.identifier == rhs.identifier
-    }
 }
 
 public enum PinchKey: Equatable, Sendable {
@@ -38,7 +35,6 @@ public protocol PinchIntegration: AnyObject {
 }
 
 public extension PinchIntegration {
-    func refreshTarget(_ target: PinchTarget) throws -> PinchTarget { target }
     func prepareDelivery(to target: PinchTarget) throws {}
 }
 

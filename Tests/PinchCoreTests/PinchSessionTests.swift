@@ -539,7 +539,8 @@ private final class TestIntegration: PinchIntegration {
     }
 
     func deliver(_ phrase: String, to target: PinchTarget) throws {
-        guard !shouldFail, !secureInputIsActive, target == currentTarget else {
+        guard !shouldFail, !secureInputIsActive,
+              target.identifier == currentTarget?.identifier else {
             throw DeliveryError.rejected
         }
         text = phrase
